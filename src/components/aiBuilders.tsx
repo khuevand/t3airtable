@@ -29,7 +29,7 @@ export default function AiBuilderBox() {
       {/* White Card */}
       <div className="relative z-10 w-full max-w-3xl rounded-2xl bg-white p-10 shadow-xl flex flex-col justify-between min-h-[220px]">
         {/* Suggestion Text */}
-        <p className="text-2xl font-medium text-slate-800 min-h-[60px] transition-all text-left">
+        <p className="text-[20px] font-base text-slate-800 min-h-[60px] transition-all text-left">
           {suggestions[index]}
         </p>
 
