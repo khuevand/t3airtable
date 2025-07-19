@@ -4,6 +4,10 @@ import { Geist } from "next/font/google";
 import { api } from "~/utils/api";
 
 import "~/styles/globals.css";
+import {
+  ClerkProvider,
+} from '@clerk/nextjs'
+import { dark, neobrutalism } from '@clerk/themes'
 
 const geist = Geist({
   subsets: ["latin"],
@@ -11,9 +15,11 @@ const geist = Geist({
 
 const MyApp: AppType = ({ Component, pageProps }) => {
   return (
-    <div className={geist.className}>
+    <ClerkProvider appearance={{
+        baseTheme: neobrutalism,
+      }}>
       <Component {...pageProps} />
-    </div>
+  </ClerkProvider>  
   );
 };
 
