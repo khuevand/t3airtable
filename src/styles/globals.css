@@ -4,3 +4,35 @@
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
+
+@layer utilities {
+  .animated-dots-bg {
+    background-image: radial-gradient(currentColor 2px, transparent 2px); /* Make dots bigger */
+    background-size: 28px 28px; /* Adjust spacing */
+    color: rgb(255, 99, 132); /* Fallback base color */
+    animation: colorShift 6s linear infinite;
+    
+    /* Add radial transparency around center */
+    mask-image: radial-gradient(ellipse at center, black 0%, transparent 80%);
+    -webkit-mask-image: radial-gradient(ellipse at center, black 0%, transparent 80%);
+  }
+
+  @keyframes colorShift {
+    0% {
+      color: rgb(255, 99, 132); /* red-ish */
+    }
+    25% {
+      color: rgb(54, 162, 235); /* blue-ish */
+    }
+    50% {
+      color: rgb(75, 192, 192); /* teal-ish */
+    }
+    75% {
+      color: rgb(153, 102, 255); /* purple-ish */
+    }
+    100% {
+      color: rgb(255, 99, 132); /* back to red */
+    }
+  }
+}
+

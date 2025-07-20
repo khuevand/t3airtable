@@ -10,6 +10,7 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
+  ArrowLeft,
   ChevronRight
 } from "lucide-react";
 
@@ -42,7 +43,7 @@ export default function Home() {
           </div>
         </header>
     
-        <section className="flex items-center justify-between px-10 py-5 bg-[#f7f8f1] border-b border-slate-100 hover:bg-[#ffffff]">
+        <section className="flex items-center justify-between px-10 py-4 bg-[#f7f8f1] border-b border-slate-100 hover:bg-[#ffffff]">
           <div className="flex items-center gap-13">
             <Link href="/">
               <div className="text-2xl font-bold text-gray-800">Airtable</div>
@@ -111,14 +112,28 @@ export default function Home() {
           </p>
           <AiBuilderBox />
           <SignedIn>
-            <Link href="/dashboard">
-              <button className="mt-8 rounded bg-green-600 px-6 py-3 text-lg text-white hover:bg-green-700">
-                Go to Dashboard
-              </button>
-            </Link>
+            {/* nothing yet to add */}
           </SignedIn>
         </section>
 
+        <section className="relative px-10 ml-30">
+          <h1 className="mt-25 max-w-3xl text-left text-[48px] font-[500] leading-[1.1] text-gray-800">
+            See what others are building
+          </h1>
+          <div className="mt-10 flex items-start gap-110">
+            <p className="max-w-5xl text-left text-[25px] font-[490] leading-[1.1] text-gray-800">
+              Skip the code. Transform your data into custom interfaces, automations, and agents with Airtable's AI-native app platform.
+            </p>
+            <div className="flex justify-center gap-2">
+              <button className="flex items-center gap-2 rounded-full border px-3 py-3 bg-black text-base text-white font-semibold hover:bg-slate-700">
+                  <ArrowLeft className="w-4 h-4" />
+              </button>
+              <button className="flex items-center gap-2 rounded-full border px-3 py-3 bg-black text-base text-white font-semibold hover:bg-slate-700">
+                  <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </section>
         {/* Optional: Add feature highlights or footer here */}
       </main>
     </>
