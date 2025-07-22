@@ -3,8 +3,12 @@ import {
   SignOutButton,
   SignedIn,
   SignedOut,
+  useUser
 } from "@clerk/nextjs";
+import { useRouter } from "next/router";
+import { useEffect } from "react";
 import AiBuilderBox from "~/components/aiBuilders";
+import home from "~/pages/home";
 import Head from "next/head";
 import Image from "next/image";
 import Link from "next/link";
@@ -15,6 +19,15 @@ import {
 } from "lucide-react";
 
 export default function Home() {
+  const router = useRouter();
+  const { isSignedIn } = useUser();
+
+  useEffect(() => {
+  if (isSignedIn && router.pathname === "/") {
+    router.push("/home");
+  }
+  }, [isSignedIn, router]);
+
   return (
     <>
       <Head>
@@ -36,7 +49,7 @@ export default function Home() {
             </p>
             <Link
               href="#"
-              className="flex items-center gap-1 text-base font-medium text-blue-700 hover:underline">
+              className="flex items-center gap-1 text-base font-medium text-blue-700 hover:underline cursor-pointer">
               <span>See what's possible</span>
               <ArrowRight className="w-4 h-4 text-blue-700" />
             </Link>
@@ -110,7 +123,7 @@ export default function Home() {
           <p className="mt-1 max-w-3xl mx-auto text-[48px] font-[490] leading-[1.1] text-gray-800">
             Build with AI that means business
           </p>
-          <AiBuilderBox />
+          <AiBuilderBox/>
           <SignedIn>
             {/* nothing yet to add */}
           </SignedIn>
@@ -126,10 +139,10 @@ export default function Home() {
             </p>
             <div className="flex justify-center gap-2">
               <button className="flex items-center gap-2 rounded-full border px-3 py-3 bg-black text-base text-white font-semibold hover:bg-slate-700">
-                  <ArrowLeft className="w-4 h-4" />
+                  <ArrowLeft className="w-4 h-4 cursor-pointer" />
               </button>
               <button className="flex items-center gap-2 rounded-full border px-3 py-3 bg-black text-base text-white font-semibold hover:bg-slate-700">
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight className="w-4 h-4 cursor-pointer" />
               </button>
             </div>
           </div>
