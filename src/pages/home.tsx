@@ -12,19 +12,32 @@ import {Bell,
         BookOpen,
         ShoppingBag,
         Share,
-        Book} from "lucide-react";
+        ArrowUp,
+        Grid2X2,
+        Sparkles,
+        TableProperties
+      } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import clsx from "clsx";
 
 export default function HomeDashboard() {
   const { user } = useUser();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const sidebarExpanded = isSidebarOpen || isHovered;
+
+  const dropdownOptions = [
+    "Today",
+    "Opened in past 7 days",
+    "Opened in past 30 days",
+    "Anytime",
+  ];
+
   return (
     <div className="h-screen flex flex-col">
       {/* Header Section */}
@@ -100,7 +113,7 @@ export default function HomeDashboard() {
       </section>
 
       {/* Below the header: Sidebar + Main */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden bg-[#f9fafb]">
         {/* Sidebar */}
         <aside
           className={`transition-all duration-300 ${
@@ -195,7 +208,7 @@ export default function HomeDashboard() {
             <div className="flex items-center gap-1">
               <Link
                 href="#"
-                className="flex items-center text-[13px] text-slate-800 font-medium cursor-pointer">
+                className="flex items-center text-[13px] text-slate-800 font-medium">
                 <CircleCheck className="w-[18px] h-[18px] text-green-700 mr-2" />
                 <span>Welcome to the improved Home.</span>
               </Link>
@@ -209,52 +222,112 @@ export default function HomeDashboard() {
               <span className="font-medium">See what's new</span>
             </button>
           </section>
+        
           <div className="p-6">
-            <div className="mb-4">
-              <div className="text-xl font-medium text-gray-800 mb-1">Home</div>
-              <p className="text-sm text-gray-500">Opened anytime</p>
+            <div className="mb-6 ml-5 mt-2">
+              <div className="text-[27px] font-bold text-gray-800 mb-1">Home</div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="ml-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
               {[
                 {
                   title: "Start with Omni",
+                  icon: <Sparkles className="w-4 h-4 text-[#dc64c1]" />,
                   desc: "Use AI to build a custom app tailored to your workflow",
+                  descColor: "text-gray-600 text-[13px]",
                 },
                 {
                   title: "Start with templates",
-                  desc: "Select a template to get started and customize",
+                  icon: <Grid2X2 className="w-4 h-4 text-purple-900" />,
+                  desc: "Select a template to get started and customize as you go.",
+                  descColor: "text-gray-600 text-[13px]",
                 },
                 {
                   title: "Quickly upload",
-                  desc: "Easily migrate existing projects",
+                  icon: <ArrowUp className="w-4 h-4 text-green-700" />,
+                  desc: "Easily migrate existing projects in just a few minutes.",
+                  descColor: "text-gray-600 text-[13px]",
                 },
                 {
                   title: "Build an app on your own",
-                  desc: "Start with a blank app",
+                  icon: <TableProperties className="w-4 h-4 text-blue-800" />,
+                  desc: "Start with a blank app and build your ideal workflow.",
+                  descColor: "text-gray-600 text-[13px]",
                 },
               ].map((card, index) => (
                 <div
                   key={index}
-                  className="border rounded p-4 text-sm text-center shadow-sm"
+                  className="border border-gray-300 w-111 rounded-md px-5 py-4 text-sm text-left shadow-xs bg-white hover:shadow-md cursor-pointer"
                 >
-                  <p className="font-semibold">{card.title}</p>
-                  <p>{card.desc}</p>
+                  <div className="flex items-center gap-2 mb-1">
+                    {card.icon}
+                    <p className="font-semibold">{card.title}</p>
+                  </div>
+                  <p className={card.descColor || "text-gray-500"}>{card.desc}</p>
                 </div>
               ))}
             </div>
           </div>
+          
+          <section className="flex items-center justify-between px-6 pt-4 pb-2 mb-30">
+            {/* Dropdown (Opened anytime) */}
+            <div className="relative inline-block text-left">
+              <button
+                onClick={() => setIsDropdownOpen((prev) => !prev)}
+                className="ml-6 text-[15px] text-gray-500 hover:text-black flex items-center gap-1"
+              >
+                Opened anytime
+                <svg
+                  className="w-4 h-4 mt-[1px] text-gray-500"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
 
-          <hr className="my-6 border-gray-200" />
+              {isDropdownOpen && (
+                <div className="absolute z-10 mt-2 w-56 rounded-md bg-white border border-gray-300 shadow-xl focus:outline-none">
+                  <div className="py-1">
+                    {dropdownOptions.map((option, index) => (
+                      <button
+                        key={index}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        onClick={() => {
+                          setIsDropdownOpen(false);
+                          console.log("Selected:", option);
+                        }}
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
-          <div className="text-sm text-center text-gray-500">
-            You haven't opened anything recently
-            <div>
-              <button className="mt-2 px-3 py-1 border rounded text-sm hover:bg-gray-100">
-                Go to all workspaces
+            {/* Icon group (Right side) */}
+            <div className="flex items-center gap-1">
+              <button className="p-1 rounded-full" title="View items in list">
+                <AlignJustify className="w-5 h-5 text-gray-500 hover:text-gray-600 cursor-pointer" />
+              </button>
+              <button className="px-1 py-1 rounded-full bg-gray-200" title="View items in grid">
+                <Grid2X2 className="w-5 h-5 text-gray-600" />
               </button>
             </div>
-          </div>
+          </section>
+
+          <section className="flex flex-col items-center justify-center h-[300px] text-sm text-gray-500">
+            <p className="text-[21px] text-gray-900 mb-1">
+              You haven't opened anything recently
+            </p>
+            <p className="mb-4 text-[13px]">Apps that you have recently opened will appear here.</p>
+            <button className="px-2 py-1.5 border border-gray-300 rounded-lg shadow-sm text-sm text-gray-900 bg-white hover:bg-gray-100 transition">
+              Go to all workspaces
+            </button>
+          </section>
         </main>
       </div>
     </div>
