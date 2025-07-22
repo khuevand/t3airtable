@@ -33,7 +33,7 @@ export default function AiBuilderBox() {
           {/* Button Group at the bottom */}
           <div className="mt-11 flex justify-between items-center">
             <button className="flex items-center gap-2 rounded-full border border-gray-300 px-6 py-3 text-base font-semibold hover:bg-slate-50">
-              <Shuffle className="w-4 h-4" /> New Suggestion
+              <Shuffle className="" /> New Suggestion
             </button>
 
             <button className="flex items-center gap-2 rounded-full bg-black px-6 py-3 text-base font-semibold text-white hover:bg-gray-700">
