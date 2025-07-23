@@ -16,6 +16,7 @@ model Base {
   name      String
   tables    Table[]  @relation("BaseTables")
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt @default(now())
 }
 
 model Table {

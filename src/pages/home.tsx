@@ -23,12 +23,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import clsx from "clsx";
-
+import { formatDistanceToNow } from "date-fns";
 
 type Base = {
   id: string;
   name: string;
   createdAt: string;
+  updatedAt: string;
 };
 
 export default function HomeDashboard() {
@@ -50,6 +51,7 @@ export default function HomeDashboard() {
 
   const handleBuildYourOwnClick = async () => {
     // sending data to server to create/ update a resource
+    // create new base when we press on Build an app button
     const res = await fetch("/api/createBase", { method: "POST" });
     const data = await res.json();
 
@@ -62,6 +64,7 @@ export default function HomeDashboard() {
 
   const [bases, setBases] = useState<Base[]>([]);
 
+  // fetch all bases available under the user account
   useEffect(() => {
     const fetchBases = async () => {
       const res = await fetch("/api/bases");
@@ -380,8 +383,8 @@ export default function HomeDashboard() {
                     onClick={() => router.push(`/base/${base.id}`)}
                   >
                     <p className="text-gray-900 font-semibold">{base.name}</p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Created: {new Date(base.createdAt).toLocaleDateString()}
+                    <p className="text-sm text-gray-500">
+                      Opened {formatDistanceToNow(new Date(base.updatedAt))} ago
                     </p>
                   </div>
                 ))}
