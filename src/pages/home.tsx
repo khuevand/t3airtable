@@ -18,10 +18,18 @@ import {Bell,
         TableProperties
       } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
+import { useRouter } from "next/router";
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import clsx from "clsx";
+
+
+type Base = {
+  id: string;
+  name: string;
+  createdAt: string;
+};
 
 export default function HomeDashboard() {
   const { user } = useUser();
@@ -37,6 +45,31 @@ export default function HomeDashboard() {
     "Opened in past 30 days",
     "Anytime",
   ];
+
+  const router = useRouter();
+
+  const handleBuildYourOwnClick = async () => {
+    // sending data to server to create/ update a resource
+    const res = await fetch("/api/createBase", { method: "POST" });
+    const data = await res.json();
+
+    if (res.ok) {
+      router.push(`/base/${data.baseId}`);
+    } else {
+      alert("Failed to create base.");
+    }
+  };
+
+  const [bases, setBases] = useState<Base[]>([]);
+
+  useEffect(() => {
+    const fetchBases = async () => {
+      const res = await fetch("/api/bases");
+      const data = await res.json();
+      setBases(data);
+    };
+    fetchBases();
+  }, []);
 
   return (
     <div className="h-screen flex flex-col">
@@ -253,19 +286,27 @@ export default function HomeDashboard() {
                   icon: <TableProperties className="w-4 h-4 text-blue-800" />,
                   desc: "Start with a blank app and build your ideal workflow.",
                   descColor: "text-gray-600 text-[13px]",
+                  onClick: handleBuildYourOwnClick,
                 },
-              ].map((card, index) => (
-                <div
-                  key={index}
-                  className="border border-gray-300 w-111 rounded-md px-5 py-4 text-sm text-left shadow-xs bg-white hover:shadow-md cursor-pointer"
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    {card.icon}
-                    <p className="font-semibold">{card.title}</p>
+              ].map((card, index) => {
+                const content = (
+                  <div
+                    className="border border-gray-300 w-111 rounded-md px-5 py-4 text-sm text-left shadow-xs bg-white hover:shadow-md cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      {card.icon}
+                      <p className="font-semibold">{card.title}</p>
+                    </div>
+                    <p className={card.descColor || "text-gray-500"}>{card.desc}</p>
                   </div>
-                  <p className={card.descColor || "text-gray-500"}>{card.desc}</p>
-                </div>
-              ))}
+                );
+
+                return (
+                  <div key={index} onClick={card.onClick} className={card.onClick ? "cursor-pointer" : ""}>
+                    {content}
+                  </div>
+                );
+              })}
             </div>
           </div>
           
@@ -319,14 +360,33 @@ export default function HomeDashboard() {
             </div>
           </section>
 
-          <section className="flex flex-col items-center justify-center h-[300px] text-sm text-gray-500">
-            <p className="text-[21px] text-gray-900 mb-1">
-              You haven't opened anything recently
-            </p>
-            <p className="mb-4 text-[13px]">Apps that you have recently opened will appear here.</p>
-            <button className="px-2 py-1.5 border border-gray-300 rounded-lg shadow-sm text-sm text-gray-900 bg-white hover:bg-gray-100 transition">
-              Go to all workspaces
-            </button>
+          <section className="flex flex-col items-center justify-center min-h-[300px] text-sm text-gray-500">
+            {bases.length === 0 ? (
+              <>
+                <p className="text-[21px] text-gray-900 mb-1">
+                  You haven't opened anything recently
+                </p>
+                <p className="mb-4 text-[13px]">Apps that you have recently opened will appear here.</p>
+                <button className="px-2 py-1.5 border border-gray-300 rounded-lg shadow-sm text-sm text-gray-900 bg-white hover:bg-gray-100 transition">
+                  Go to all workspaces
+                </button>
+              </>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full px-10">
+                {bases.map((base) => (
+                  <div
+                    key={base.id}
+                    className="border border-gray-300 rounded-lg bg-white shadow-md p-4 cursor-pointer hover:shadow-lg transition"
+                    onClick={() => router.push(`/base/${base.id}`)}
+                  >
+                    <p className="text-gray-900 font-semibold">{base.name}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Created: {new Date(base.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         </main>
       </div>
