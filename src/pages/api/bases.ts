@@ -6,12 +6,13 @@ const prisma = new PrismaClient();
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
-      // sending GET signal (the method) to server to retrieve the base
+    // sending GET signal (the method) to server to retrieve the base
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
     const bases = await prisma.base.findMany({
+      // get by the created time
       orderBy: { createdAt: "desc" },
     });
 

@@ -15,15 +15,28 @@ import {Bell,
         ArrowUp,
         Grid2X2,
         Sparkles,
-        TableProperties
+        TableProperties,
+        Ellipsis,
+        Database,
+        Trash2
       } from "lucide-react";
-import { useUser } from "@clerk/nextjs";
+import { useUser, SignOutButton } from "@clerk/nextjs";
 import { useRouter } from "next/router";
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import clsx from "clsx";
+import { toast } from "react-toastify";
 import { formatDistanceToNow } from "date-fns";
+
+function stringToColor(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = hash % 360;
+  return `hsl(${hue}, 70%, 50%)`;
+}
 
 type Base = {
   id: string;
@@ -36,9 +49,11 @@ export default function HomeDashboard() {
   const { user } = useUser();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
 
   const sidebarExpanded = isSidebarOpen || isHovered;
+  const [isOpen, setIsOpen] = useState(false);
+  const toggleMenu = () => setIsOpen(!isOpen);
 
   const dropdownOptions = [
     "Today",
@@ -48,19 +63,27 @@ export default function HomeDashboard() {
   ];
 
   const router = useRouter();
+  const [isCreating, setIsCreating] = useState(false);
 
   const handleBuildYourOwnClick = async () => {
-    // sending data to server to create/ update a resource
-    // create new base when we press on Build an app button
-    const res = await fetch("/api/createBase", { method: "POST" });
-    const data = await res.json();
+    setIsCreating(true); // 🟦 Changed from setIsBaseLoading
+    try {
+      const res = await fetch("/api/createBase", { method: "POST" });
+      const data = await res.json();
 
-    if (res.ok) {
-      router.push(`/base/${data.baseId}`);
-    } else {
-      alert("Failed to create base.");
+      if (res.ok) {
+        router.push(`/base/${data.baseId}`);
+      } else {
+        alert("Failed to create base.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("An error occurred.");
+    } finally {
+      setIsCreating(false); // 🟦 Changed from setIsBaseLoading
     }
   };
+
 
   const [bases, setBases] = useState<Base[]>([]);
 
@@ -73,6 +96,34 @@ export default function HomeDashboard() {
     };
     fetchBases();
   }, []);
+
+  const [showMenu, setShowMenu] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const handleDelete = async (base: Base) => {
+    try {
+      const res = await fetch(`/api/base/${base.id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to delete base");
+      }
+
+      toast.success("Base moved to trash.");
+      setShowConfirm(false);
+      setTimeout(() => {
+        router.reload();
+      }, 100);
+
+      // Optionally remove the base from local state (if passed as props)
+      // onDelete?.(base.id);
+
+    } catch (error) {
+      console.error(error);
+      toast.error("Something went wrong while deleting.");
+    }
+  };
 
   return (
     <div className="h-screen flex flex-col">
@@ -131,20 +182,58 @@ export default function HomeDashboard() {
           >
             <Bell className="w-4 h-4 text-gray-700" />
           </button>
+    
+          <div className="relative inline-block text-left">
+            <button onClick={toggleMenu} className="flex items-center space-x-2">
+              {user?.imageUrl ? (
+                <Image
+                  src={user.imageUrl}
+                  alt="User avatar"
+                  className="rounded-full"
+                  width={26}
+                  height={26}
+                />
+              ) : (
+                <div className="w-8 h-8 flex items-center justify-center rounded-full bg-purple-500 text-white text-sm font-semibold">
+                  {user?.firstName?.[0] ?? "U"}
+                </div>
+              )}
+            </button>
 
-          {user?.imageUrl ? (
-            <Image
-              src={user.imageUrl}
-              alt="User avatar"
-              className="rounded-full"
-              width={26}
-              height={26}
-            />
-          ) : (
-            <div className="w-8 h-8 flex items-center justify-center rounded-full bg-purple-500 text-white text-sm font-semibold">
-              {user?.firstName?.[0] ?? "U"}
-            </div>
-          )}
+            {isOpen && (
+              <div className="absolute right-0 z-10 mt-2 w-64 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 font-sans text-sm text-gray-800">
+                <div className="px-4 py-3 border-b">
+                  <p className="font-semibold">{user?.fullName}</p>
+                  <p className="text-xs text-gray-500">{user?.primaryEmailAddress?.emailAddress}</p>
+                </div>
+
+                <ul className="py-2">
+                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer">Account</li>
+                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex justify-between">
+                    <span>Manage groups</span>
+                    <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">Business</span>
+                  </li>
+                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer">Notification preferences</li>
+                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer">Language preferences</li>
+                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex justify-between">
+                    <span>Appearance</span>
+                    <span className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full">Beta</span>
+                  </li>
+                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer">Integrations</li>
+                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer">Builder hub</li>
+                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-red-500">Trash</li>
+                </ul>
+
+                <div className="border-t px-4 py-2">
+                  <SignOutButton>
+                    <button className="w-full text-left hover:bg-gray-100 px-2 py-1 rounded-md text-red-600">
+                      Log out
+                    </button>
+                  </SignOutButton>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
@@ -304,10 +393,29 @@ export default function HomeDashboard() {
                   </div>
                 );
 
-                return (
-                  <div key={index} onClick={card.onClick} className={card.onClick ? "cursor-pointer" : ""}>
-                    {content}
+                return (     
+                  <div
+                  key={index}
+                  onClick={!isCreating ? card.onClick : undefined}
+                  className={card.onClick ? "cursor-pointer" : ""}
+                >
+                  <div className="border border-gray-300 w-111 rounded-md px-5 py-4 text-sm text-left shadow-xs bg-white hover:shadow-md transition-all">
+                    {isCreating ? (
+                      <div className="flex justify-center items-center h-16">
+                        <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-blue-500 border-opacity-75" />
+                        <p className="ml-2 text-sm text-gray-600">Creating...</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2 mb-1">
+                          {card.icon}
+                          <p className="font-semibold">{card.title}</p>
+                        </div>
+                        <p className={card.descColor || "text-gray-500"}>{card.desc}</p>
+                      </>
+                    )}
                   </div>
+                </div>
                 );
               })}
             </div>
@@ -317,7 +425,7 @@ export default function HomeDashboard() {
             {/* Dropdown (Opened anytime) */}
             <div className="relative inline-block text-left">
               <button
-                onClick={() => setIsDropdownOpen((prev) => !prev)}
+                onClick={() => setIsFilterDropdownOpen((prev) => !prev)}
                 className="ml-6 text-[15px] text-gray-500 hover:text-black flex items-center gap-1"
               >
                 Opened anytime
@@ -332,7 +440,7 @@ export default function HomeDashboard() {
                 </svg>
               </button>
 
-              {isDropdownOpen && (
+              {isFilterDropdownOpen && (
                 <div className="absolute z-10 mt-2 w-56 rounded-md bg-white border border-gray-300 shadow-xl focus:outline-none">
                   <div className="py-1">
                     {dropdownOptions.map((option, index) => (
@@ -340,7 +448,7 @@ export default function HomeDashboard() {
                         key={index}
                         className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                         onClick={() => {
-                          setIsDropdownOpen(false);
+                          setIsFilterDropdownOpen(false);
                           console.log("Selected:", option);
                         }}
                       >
@@ -363,34 +471,117 @@ export default function HomeDashboard() {
             </div>
           </section>
 
-          <section className="flex flex-col items-center justify-center min-h-[300px] text-sm text-gray-500">
-            {bases.length === 0 ? (
-              <>
-                <p className="text-[21px] text-gray-900 mb-1">
-                  You haven't opened anything recently
-                </p>
-                <p className="mb-4 text-[13px]">Apps that you have recently opened will appear here.</p>
-                <button className="px-2 py-1.5 border border-gray-300 rounded-lg shadow-sm text-sm text-gray-900 bg-white hover:bg-gray-100 transition">
-                  Go to all workspaces
-                </button>
-              </>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full px-10">
-                {bases.map((base) => (
-                  <div
-                    key={base.id}
-                    className="border border-gray-300 rounded-lg bg-white shadow-md p-4 cursor-pointer hover:shadow-lg transition"
-                    onClick={() => router.push(`/base/${base.id}`)}
-                  >
-                    <p className="text-gray-900 font-semibold">{base.name}</p>
-                    <p className="text-sm text-gray-500">
-                      Opened {formatDistanceToNow(new Date(base.updatedAt))} ago
-                    </p>
-                  </div>
-                ))}
+           <section className="flex flex-col items-center justify-center min-h-[300px] text-sm text-gray-500">
+              {bases.length === 0 ? (
+                <>
+                  <p className="text-[21px] text-gray-900 mb-1">
+                    You haven't opened anything recently
+                  </p>
+                  <p className="mb-4 text-[13px]">Apps that you have recently opened will appear here.</p>
+                  <button className="px-2 py-1.5 border border-gray-300 rounded-lg shadow-sm text-sm text-gray-900 bg-white hover:bg-gray-100 transition">
+                    Go to all workspaces
+                  </button>
+                </>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full px-10">
+                  {bases.map((base) => {
+                    const initials = base.name.slice(0, 2).toUpperCase();
+                    const randomColor = stringToColor(base.id);
+                    return (
+                      <div className="relative group w-full max-w-sm">
+                        <div
+                          className="flex items-center justify-between border border-gray-300 rounded-lg bg-white shadow-sm p-4 hover:shadow-md cursor-pointer"
+                          onClick={() => router.push(`/base/${base.id}`)}
+                        >
+                          {/* Left: Initials */}
+                          <div
+                            className="w-10 h-10 rounded-md flex items-center justify-center text-white text-lg font-bold mr-3"
+                            style={{ backgroundColor: stringToColor(base.id) }}
+                          >
+                            {base.name.slice(0, 2).toUpperCase()}
+                          </div>
+
+                          {/* Middle: Text */}
+                          <div className="flex flex-col flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{base.name}</p>
+                            <div className="relative h-5">
+                              <p className="absolute inset-0 flex items-center gap-1 text-sm text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Database className="w-4 h-4" /> Open data
+                              </p>
+                              <p className="absolute inset-0 text-xs text-gray-400 group-hover:opacity-0 transition-opacity">
+                                Opened {formatDistanceToNow(new Date(base.updatedAt))} ago
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Right: Menu button */}
+                          <div className="relative z-20">
+                            <button
+                              className="p-1 rounded hover:bg-gray-100"
+                              onClick={(e) => {
+                                e.stopPropagation(); // prevent redirect
+                                setShowMenu((prev) => !prev);
+                              }}
+                            >
+                              <Ellipsis className="w-4 h-4" />
+                            </button>
+
+                            {/* Dropdown menu */}
+                            {showMenu && (
+                              <div className="absolute right-0 mt-2 w-28 bg-white border border-gray-200 rounded-md shadow-lg z-30">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation(); // prevent redirect
+                                    setShowConfirm(true);
+                                    setShowMenu(false);
+                                  }}
+                                  className="w-full flex items-center px-3 py-2 text-sm text-red-600 hover:bg-gray-50"
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Delete
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Confirmation modal */}
+                        {showConfirm && (
+                          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
+                            <div className="bg-white p-6 rounded shadow-lg z-50 w-[300px]">
+                              <h2 className="text-lg font-semibold mb-4">Confirm Delete</h2>
+                              <p className="mb-4">Are you sure you want to move this base to trash?</p>
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 text-sm"
+                                  onClick={() => setShowConfirm(false)}
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  className="px-4 py-2 rounded bg-red-500 hover:bg-red-600 text-white text-sm"
+                                  onClick={() => handleDelete(base)}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+            {isCreating && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-blue-500 border-opacity-75" />
+                  <span className="text-gray-700 text-sm">Creating base...</span>
+                </div>
               </div>
             )}
-          </section>
         </main>
       </div>
     </div>

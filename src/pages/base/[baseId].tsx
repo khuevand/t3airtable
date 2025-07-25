@@ -7,6 +7,8 @@ import {
 } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
 
+// Define the structure of Column, Row, Table, and Table data
+// that will be used in the application
 interface Column {
   id: string;
   name: string;
@@ -15,7 +17,10 @@ interface Column {
 }
 interface Row {
   id: string;
-  values: Record<string, string | number | null>;
+  cells: {
+    columnId: string;
+    value: string | number | null;
+  }[];
 }
 interface Table {
   id: string;
@@ -30,9 +35,11 @@ interface TableData {
 export default function BasePage() {
   const router = useRouter();
 
+  // use useMemo to memorize value of baseId based on current query param
   const baseId: string | null = useMemo(() => {
     if (!router.isReady) return null;
     const q = router.query.baseId;
+    // if baseid = string -> return string. If it's array -> return the first element
     return typeof q === "string" ? q : Array.isArray(q) ? q[0] ?? null : null;
   }, [router.isReady, router.query.baseId]);
 
@@ -42,7 +49,7 @@ export default function BasePage() {
   const [isBaseLoading, setIsBaseLoading] = useState(false);
   const [isTableLoading, setIsTableLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
+  
   useEffect(() => {
     if (!baseId) return;
     setIsBaseLoading(true);
@@ -54,6 +61,7 @@ export default function BasePage() {
         return res.json();
       })
       .then((data) => {
+        // get the the first table on display nothing is available -> active table is null
         setTables(data.tables ?? []);
         if (data.tables?.length > 0) {
           setActiveTableId(data.tables[0].id);
@@ -83,22 +91,32 @@ export default function BasePage() {
       .finally(() => setIsTableLoading(false));
   }, [baseId, activeTableId]);
 
-  const handleAddTable = useCallback(async () => {
-    if (!baseId) return;
-    try {
-      const res = await fetch(`/api/base/${baseId}/table`, { method: "POST" });
-      if (!res.ok) throw new Error(`Add table failed (${res.status})`);
-      const newTable: Table = await res.json();
-      setTables((prev) => [...prev, newTable]);
-      setActiveTableId(newTable.id);
-    } catch (err: any) {
-      setErrorMsg(err.message);
-    }
-  }, [baseId]);
+  //  handles the creation of a new table, performs an API request (fetch), 
+  // and updates the component's state with the new table or error message based on the outcome of the request.
+const handleAddTable = useCallback(async () => {
+  if (!baseId) return;
+  try {
+    const res = await fetch(`/api/base/${baseId}/table`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Untitled Table",
+        columns: [], // or provide default columns
+      }),
+    });
+    if (!res.ok) throw new Error(`Add table failed (${res.status})`);
+    
+    const newTable: Table = await res.json();
+    setTables((prev) => [...prev, newTable]);
+    setActiveTableId(newTable.id);  
+  } catch (err: any) {
+    setErrorMsg(err.message);
+  }
+}, [baseId]);
 
   const handleDeleteTable = useCallback(
     async (id: string) => {
-      if (!baseId) return;
+      if (!id) return;
       try {
         const res = await fetch(`/api/base/${baseId}/table/${id}`, {
           method: "DELETE",
@@ -122,8 +140,46 @@ export default function BasePage() {
     [baseId, activeTableId]
   );
 
-  // ✅ Fixed: Move hook logic out of conditional render
-  const columns: ColumnDef<Row>[] = useMemo(() => {
+  const handleAddColumn = useCallback(async () => {
+    if (!baseId || !activeTableId) return;
+
+    try {
+      const res = await fetch(`/api/base/${baseId}/table/${activeTableId}/column`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "New Column",
+          type: "text",
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to add column");
+
+      const updated = await res.json();
+      setTableData(updated);
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    }
+  }, [baseId, activeTableId]);
+
+  const handleAddRow = useCallback(async () => {
+    if (!baseId || !activeTableId) return;
+
+    try {
+      const res = await fetch(`/api/base/${baseId}/table/${activeTableId}/row`, {
+        method: "POST",
+      });
+
+      if (!res.ok) throw new Error("Failed to add row");
+
+      const updated = await res.json();
+      setTableData(updated);
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    }
+  }, [baseId, activeTableId]);
+
+  const columns: ColumnDef<Record<string, any>>[] = useMemo(() => {
     return tableData?.columns.map((col) => ({
       accessorKey: col.id,
       header: col.name,
@@ -131,8 +187,21 @@ export default function BasePage() {
     })) ?? [];
   }, [tableData]);
 
+  // 1. Flatten row data for TanStack
+  const transformedRows = useMemo(() => {
+    if (!tableData) return [];
+    return tableData.rows.map((row) => {
+      const values: Record<string, any> = { id: row.id };
+      (row.cells ?? []).forEach((cell) => {
+        values[cell.columnId] = cell.value ?? "";
+      });
+      return values;
+    });
+  }, [tableData]);
+
+  // 2. Init table with transformed rows
   const table = useReactTable({
-    data: tableData?.rows ?? [],
+    data: transformedRows,
     columns,
     getCoreRowModel: getCoreRowModel(),
   });
@@ -200,22 +269,36 @@ export default function BasePage() {
                         )}
                       </th>
                     ))}
+                    {/* Add Column Button */}
+                    <th className="border-b px-4 py-2 text-sm text-blue-500">
+                      <button onClick={() => handleAddColumn()}>
+                        +
+                      </button>
+                    </th>
                   </tr>
                 ))}
               </thead>
+
               <tbody>
                 {table.getRowModel().rows.map((row) => (
                   <tr key={row.id} className="even:bg-gray-50">
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id} className="px-4 py-2 border-t text-sm">
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext()
-                        )}
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     ))}
+                    <td className="border-t px-4 py-2"></td> {/* Empty cell under Add Column */}
                   </tr>
                 ))}
+
+                {/* Add Row Button */}
+                <tr>
+                  <td colSpan={columns.length + 1} className="text-center py-3 text-sm text-blue-600 hover:bg-gray-50 cursor-pointer">
+                    <button onClick={() => handleAddRow()}>
+                      +
+                    </button>
+                  </td>
+                </tr>
               </tbody>
             </table>
           </>

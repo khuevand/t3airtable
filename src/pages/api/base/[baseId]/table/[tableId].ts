@@ -2,17 +2,15 @@
 import { PrismaClient } from "@prisma/client";
 import type { NextApiRequest, NextApiResponse } from "next";
 
-const prisma = new PrismaClient();
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { baseId, tableId } = req.query;
-  console.log("YESSS");
+  const prisma = new PrismaClient();
+
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    console.log("HIIII");
     const table = await prisma.table.findFirst({
       where: {
         id: tableId as string,
@@ -42,8 +40,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
       },
     });
-    console.log("Find table:", table);
-
 
     if (!table) {
       return res.status(404).json({ error: "Table not found" });

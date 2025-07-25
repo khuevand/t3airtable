@@ -6,7 +6,7 @@ import {
   useUser
 } from "@clerk/nextjs";
 import { useRouter } from "next/router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import AiBuilderBox from "~/components/aiBuilders";
 import home from "~/pages/home";
 import Head from "next/head";
@@ -21,12 +21,20 @@ import {
 export default function Home() {
   const router = useRouter();
   const { isSignedIn } = useUser();
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
   if (isSignedIn && router.pathname === "/") {
     router.push("/home");
   }
   }, [isSignedIn, router]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false); 
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <>
@@ -117,16 +125,23 @@ export default function Home() {
 
         {/* Hero Section */}
         <section className="text-center py-20 bg-[#f9f9f5] font-sans">
-          <h1 className="max-w-3xl mx-auto text-[48px] font-[490] leading-[1.1] text-gray-800">
-            From idea to app in an instant
-          </h1>
-          <p className="mt-1 max-w-3xl mx-auto text-[48px] font-[490] leading-[1.1] text-gray-800">
-            Build with AI that means business
-          </p>
-          <AiBuilderBox/>
-          <SignedIn>
-            {/* nothing yet to add */}
-          </SignedIn>
+          {isLoading ? (
+            <div className="absolute inset-0 bg-white flex justify-center items-center z-10">
+              <div className="animate-spin rounded-full h-24 w-24 border-b-4 border-gray-800"></div>
+            </div>
+            ) : (
+            <>
+              <h1 className="max-w-3xl mx-auto text-[48px] font-[490] leading-[1.1] text-gray-800">
+                From idea to app in an instant
+              </h1>
+              <p className="mt-1 max-w-3xl mx-auto text-[48px] font-[490] leading-[1.1] text-gray-800">
+                Build with AI that means business
+              </p>
+              <AiBuilderBox/>
+              <SignedIn>
+              </SignedIn>
+             </>
+          )}
         </section>
 
         <section className="relative px-10 ml-30">

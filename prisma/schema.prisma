@@ -22,8 +22,8 @@ model Base {
 model Table {
   id      String   @id @default(cuid())
   name    String
-  baseId  String
-  base    Base     @relation("BaseTables", fields: [baseId], references: [id])
+  baseId  String // foreign key
+  base    Base     @relation("BaseTables", fields: [baseId], references: [id], onDelete: Cascade) // relation
   columns Column[] @relation("TableColumns")
   rows    Row[]    @relation("TableRows")
 }
@@ -33,7 +33,7 @@ model Column {
   name    String
   type    String // e.g., 'text', 'number', 'checkbox'
   tableId String
-  table   Table  @relation("TableColumns", fields: [tableId], references: [id])
+  table   Table  @relation("TableColumns", fields: [tableId], references: [id], onDelete: Cascade)
   order   Int
   cells   Cell[] @relation("ColumnCells")
 }
@@ -41,7 +41,7 @@ model Column {
 model Row {
   id      String @id @default(cuid())
   tableId String
-  table   Table  @relation("TableRows", fields: [tableId], references: [id])
+  table Table @relation("TableRows", fields: [tableId], references: [id], onDelete: Cascade)
   cells   Cell[] @relation("RowCells")
 }
 
@@ -50,9 +50,8 @@ model Cell {
   rowId    String
   columnId String
   value    Json
-
-  row    Row    @relation("RowCells", fields: [rowId], references: [id])
-  column Column @relation("ColumnCells", fields: [columnId], references: [id])
+  row    Row    @relation("RowCells", fields: [rowId], references: [id], onDelete: Cascade)
+  column Column @relation("ColumnCells", fields: [columnId], references: [id], onDelete: Cascade)
 }
 
 model User {
