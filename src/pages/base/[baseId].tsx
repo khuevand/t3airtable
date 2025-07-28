@@ -11,7 +11,7 @@ import { api } from "~/utils/api";
 import { useParams } from "next/navigation";
 import { util } from "zod";
 import { rename } from "fs";
-
+import { toast } from "react-toastify";
 
 // Define the structure of Column, Row, Table, and Table data
 // that will be used in the application
@@ -211,15 +211,44 @@ export default function BasePage() {
     updateCell.mutate({ rowId: rowId, columnId: columnId, value: value });
   };
   
-  const handleAddTable = () => {
+  // wait for the creation of previous table to avoid duplication/ out of order name
+  const handleAddTable = async () => {
     if (!baseId) return;
     addTable.mutate({ baseId: baseId });
   };
 
-  const handleDeleteTable = (tableId: string ) => {
-    if (!activeTableId) return;
-    removeTable.mutate({ tableId: tableId });
+  const handleDeleteTable = async (tableIdToDelete: string) => {
+    if (!baseId || !activeTableId) return;
+
+    try {
+      await removeTable.mutateAsync({ tableId: tableIdToDelete });
+
+      // Invalidate and refetch base data
+      await utils.base.getBase.invalidate({ baseId });
+
+      // Refetch the updated list of tables
+      const updatedBase = await utils.base.getBase.fetch({ baseId });
+
+      if (updatedBase?.tables.length > 0) {
+        // Prefer next table, fallback to first one
+        const fallbackTable =
+          updatedBase.tables.find((t) => t.id !== tableIdToDelete) ??
+          updatedBase.tables[0];
+
+        if (fallbackTable) {
+          setActiveTableId(fallbackTable.id);
+        } else {
+          setActiveTableId(null); // No tables left
+        }
+      } else {
+        // No tables left
+        setActiveTableId(null);
+      }
+    } catch (err) {
+      console.error("Failed to delete table", err);
+    }
   };
+
 
   const handleAddColumn = () => {
     if (!baseId || !activeTableId) return;
@@ -304,10 +333,29 @@ export default function BasePage() {
     }
   };
 
-  
+    // Handle loading
+  if (isBaseLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center text-gray-500 text-sm">
+        Loading base...
+      </div>
+    );
+  }
 
-  if (!baseData) return <div>Base not found!</div>;
-  if (!baseData.tables[0]) return <div>No table found!</div>;
+  // Handle error or missing base
+  if (baseError || !baseData) {
+    toast.error("Base not found or failed to load.", { toastId: "base-error" });
+    return (
+      <div className="h-screen flex items-center justify-center text-red-500 text-sm">
+        Error: Base not found.
+      </div>
+    );
+  }
+
+  if (!baseData.tables.length) {
+    toast.warn("No tables found in this base.", { toastId: "no-table" });
+  }
+
 
   return (
     <div className="h-screen flex">
@@ -444,7 +492,7 @@ export default function BasePage() {
 
               <button
                 onClick={handleAddTable}
-                className="flex items-center ml-2 px-2 py-1 text-xs text-blue-600 border border-blue-600 rounded hover:bg-blue-50"
+                className="flex items-center ml-2 px-2 py-1 text-[14px] text-gray-500 hover:text-gray-700"
               >
                 + Add or Import
               </button>
