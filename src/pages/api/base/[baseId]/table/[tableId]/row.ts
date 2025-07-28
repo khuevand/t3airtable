@@ -48,17 +48,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     });
 
+    // after newRow is created:
+    const fullNewRow = await prisma.row.findUnique({
+      where: { id: newRow.id },
+      include: { cells: true },
+    });
+
     return res.status(200).json({
-      name: updatedTable?.name,
-      columns: updatedTable?.columns ?? [],
-      rows:
-        updatedTable?.rows.map((row) => ({
-          id: row.id,
-          cells: row.cells.map((cell) => ({
-            columnId: cell.columnId,
-            value: cell.value,
-          })),
-        })) ?? [],
+      id: fullNewRow?.id,
+      cells: fullNewRow?.cells.map((cell) => ({
+        columnId: cell.columnId,
+        value: cell.value,
+      })),
     });
   } catch (err) {
     console.error("Error creating row:", err);

@@ -67,17 +67,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     });
 
-    res.status(200).json({
-      name: updatedTable?.name,
-      columns: updatedTable?.columns ?? [],
-      rows:
-        updatedTable?.rows.map((row) => ({
-          id: row.id,
-          cells: row.cells.map((cell) => ({
-            columnId: cell.columnId,
-            value: cell.value,
-          })),
-        })) ?? [],
+    return res.status(200).json({
+      id: newColumn.id,
+      name: newColumn.name,
+      type: newColumn.type,
+      order: newColumn.order,
     });
   } catch (err) {
     console.error("Error adding column:", err);

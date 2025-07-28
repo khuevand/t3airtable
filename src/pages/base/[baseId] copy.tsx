@@ -5,12 +5,9 @@ import {
   getCoreRowModel,
   flexRender,
 } from "@tanstack/react-table";
-import type { CellContext, ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef } from "@tanstack/react-table";
 import { ChevronDown, CheckSquare, Square, Search, Settings, Table } from "lucide-react";
 import { api } from "~/utils/api";
-import { useParams } from "next/navigation";
-import { util } from "zod";
-import { rename } from "fs";
 
 
 // Define the structure of Column, Row, Table, and Table data
@@ -38,139 +35,37 @@ interface TableData {
   rows: Row[];
 }
 
-type RowData = Record<string, any>;
-
-interface EditableCellProps {
-  initialValue: string;
-  tableId: string;
-  rowId: string;
-  columnId: string;
-}
-
-const EditableCell: React.FC<EditableCellProps> = ({
-  initialValue,
-  tableId,
-  rowId,
-  columnId,
-}) => {  const [value, setValue] = useState(initialValue);
-  const utils = api.useUtils();
-  const updateCell = api.cell.updateCell.useMutation();
-
-  const handleBlur = () => {
-    if (value !== initialValue) {
-      updateCell.mutate(
-        { rowId, columnId, value },
-        {
-          onSuccess: () => utils.table.getTableById.invalidate({ tableId }),
-        }
-      );
-    }
-  };
-
-  return (
-    <input
-      className="w-full border-none bg-transparent focus:outline-none"
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={handleBlur}
-    />
-  );
-}
-
 export default function BasePage() {
   const router = useRouter();
 
-  const params = useParams();
-  const baseId = params?.baseId as string;
+  // use useMemo to memorize value of baseId based on current query param
+  const baseId: string | null = useMemo(() => {
+    if (!router.isReady) return null;
+    const q = router.query.baseId;
+    // if baseid = string -> return string. If it's array -> return the first element
+    return typeof q === "string" ? q : Array.isArray(q) ? q[0] ?? null : null;
+  }, [router.isReady, router.query.baseId]);
 
-
-  ////////////////////// NEW TRPC PART ///////////////////////
-
+  const [tables, setTables] = useState<Table[]>([]);
   const [activeTableId, setActiveTableId] = useState<string | null>(null);
+  const [tableData, setTableData] = useState<TableData | null>(null);
+  const [isBaseLoading, setIsBaseLoading] = useState(false);
+
+  const [isTableLoading, setIsTableLoading] = useState(false);
+  const [isAddingColumn, setIsAddingColumn] = useState(false);
+  const [isAddingRow, setIsAddingRow] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [selectedColIndex, setSelectedColIndex] = useState<number | null>(null);
   const [allSelected, setAllSelected] = useState(false);
   const [activeCell, setActiveCell] = useState<{ row: number; col: number } | null>(null);
 
-  const [isAddingColumn, setIsAddingColumn] = useState(false);
   const [newColumnName, setNewColumnName] = useState("New Column");
   const [newColumnType, setNewColumnType] = useState("text");
   const [editColumnName, setEditColumnName] = useState("");
   const [contextRow, setContextRow] = useState<string | null>(null);
-  // Fetch base info
-  const { data: baseData, isLoading: isBaseLoading, error: baseError } =
-    api.base.getBase.useQuery({ baseId });
-
-  // Once baseData is fetched, set activeTableId
-  useEffect(() => {
-    if ( baseData && baseData.tables[0]) {
-      setActiveTableId(baseData.tables[0].id);
-    }
-  }, [baseData]);
-
-  // Fetch table data only when both baseId and activeTableId are available
-  const { data: tableData, isLoading: isTableLoading } = api.table.getTableById.useQuery({ baseId: baseId!, tableId: activeTableId! });
-
-  const addTable = api.table.addTable.useMutation({
-    onError: (e) => {
-      console.error("Delete row error occurred:", e);
-    },
-    onSuccess: () => {
-      void utils.table.getTableById.invalidate();
-    }
-  });
-
-  const removeTable = api.table.deleteTable.useMutation({
-    onError: (e) => {
-      console.error("Delete row error occurred:", e);
-    },
-    onSuccess: () => {
-      void utils.table.getTableById.invalidate();
-    }
-  });
-  const createColumn = api.column.addColumn.useMutation({
-    onError: (e) => {
-      console.error("Delete row error occurred:", e);
-    },
-    onSuccess: () => {
-      void utils.table.getTableById.invalidate();
-    }
-  });
-  const removeColumn = api.column.deleteColumn.useMutation({
-    onError: (e) => {
-      console.error("Delete row error occurred:", e);
-    },
-    onSuccess: () => {
-      void utils.table.getTableById.invalidate();
-    }
-  });
-  const createRow = api.row.addRow.useMutation({
-    onError: (e) => {
-      console.error("Delete row error occurred:", e);
-    },
-    onSuccess: () => {
-      void utils.table.getTableById.invalidate();
-    }
-  });
-
-  const deleteRow = api.row.deleteRow.useMutation({
-    onError: (e) => {
-      console.error("Delete row error occurred:", e);
-    },
-    onSuccess: () => {
-      void utils.table.getTableById.invalidate();
-    }
-  });
-
-  const renameColumn = api.column.renameColumn.useMutation({
-    onError: (e) => {
-      console.error("Delete row error occurred:", e);
-    },
-    onSuccess: () => {
-      void utils.table.getTableById.invalidate();
-    }
-  });
 
   const tableRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -178,12 +73,52 @@ export default function BasePage() {
 
   const utils = api.useUtils(); // for refetch if needed
 
-  const updateCell = api.cell.updateCell.useMutation({
+  const { mutate: updateCell } = api.cell.updateCell.useMutation({
     onSuccess: () => {
       utils.table.getTableById.invalidate(); // if you want to refresh table
     },
   });
 
+  useEffect(() => {
+    if (!baseId) return;
+    setIsBaseLoading(true);
+    setErrorMsg(null);
+
+    fetch(`/api/base/${baseId}`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Base fetch failed (${res.status})`);
+        return res.json();
+      })
+      .then((data) => {
+        // get the the first table on display nothing is available -> active table is null
+        setTables(data.tables ?? []);
+        if (data.tables?.length > 0) {
+          setActiveTableId(data.tables[0].id);
+        } else {
+          setActiveTableId(null);
+        }
+      })
+      .catch((err) => setErrorMsg(err.message))
+      .finally(() => setIsBaseLoading(false));
+  }, [baseId]);
+
+  useEffect(() => {
+    if (!baseId || !activeTableId) {
+      setTableData(null);
+      return;
+    }
+    setIsTableLoading(true);
+    setErrorMsg(null);
+
+    fetch(`/api/base/${baseId}/table/${activeTableId}`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Table fetch failed (${res.status})`);
+        return res.json();
+      })
+      .then((data: TableData) => setTableData(data))
+      .catch((err) => setErrorMsg(err.message))
+      .finally(() => setIsTableLoading(false));
+  }, [baseId, activeTableId]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -206,63 +141,220 @@ export default function BasePage() {
 
   //  handles the creation of a new table, performs an API request (fetch), 
   // and updates the component's state with the new table or error message based on the outcome of the request.
-  const handleBlur = (rowId: string, columnId: string, value: string) => {
+  const handleAddTable = useCallback(async () => {
     if (!baseId) return;
-    updateCell.mutate({ rowId: rowId, columnId: columnId, value: value });
-  };
-  
-  const handleAddTable = () => {
-    if (!baseId) return;
-    addTable.mutate({ baseId: baseId });
-  };
+    try {
+      const res = await fetch(`/api/base/${baseId}/table`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Untitled Table",
+          columns: [], // or provide default columns
+        }),
+      });
+      if (!res.ok) throw new Error(`Add table failed (${res.status})`);
+      
+      const newTable: Table = await res.json();
+      setTables((prev) => [...prev, newTable]);
+      setActiveTableId(newTable.id);  
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    }
+  }, [baseId]);
 
-  const handleDeleteTable = (tableId: string ) => {
-    if (!activeTableId) return;
-    removeTable.mutate({ tableId: tableId });
-  };
+  const handleDeleteTable = useCallback(
+    async (id: string) => {
+      if (!id) return;
+      try {
+        const res = await fetch(`/api/base/${baseId}/column/[columnId].ts`, {
+          method: "DELETE",
+        });
+        if (!res.ok) throw new Error(`Delete table failed (${res.status})`);
 
-  const handleAddColumn = () => {
+        setTables((prev) => {
+          const updated = prev.filter((t) => t.id !== id);
+          if (updated.length === 0) {
+            setActiveTableId(null);
+            setTableData(null);
+          } else if (id === activeTableId) {
+            setActiveTableId(updated[0]?.id ?? null);
+            setTableData(null);
+          }
+          return updated;
+        });
+      } catch (err: any) {
+        setErrorMsg(err.message);
+      }
+    },
+    [baseId, activeTableId]
+  );
+
+  const handleAddColumn = useCallback(async (name: string, type: string) => {
     if (!baseId || !activeTableId) return;
-    createColumn.mutate({ tableId: activeTableId, name: newColumnName, type: newColumnType});
-  };
 
-  const handleDeleteColumn = ( columnId: string ) => {
+    try {
+      const res = await fetch(`/api/base/${baseId}/table/${activeTableId}/column`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          type,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to add column");
+
+      const newColumn = await res.json();
+
+      setTableData((prev) => {
+        if (!prev) return null;
+
+        // Add new column to columns array
+        const updatedColumns = [...prev.columns, newColumn];
+
+        // Patch all rows with a blank cell for the new column
+        const updatedRows = prev.rows.map((row) => ({
+          ...row,
+          cells: Array.isArray(row.cells)
+            ? [...row.cells, { columnId: newColumn.id, value: "" }]
+            : [{ columnId: newColumn.id, value: "" }],
+        }));
+
+        return {
+          ...prev,
+          columns: updatedColumns,
+          rows: updatedRows,
+        };
+      });
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    }
+  }, [baseId, activeTableId]);
+
+  const handleDeleteColumn = useCallback(async (columnId: string) => {
     if (!baseId || !activeTableId) return;
-    removeColumn.mutate({ columnId });
-  };
+
+    try {
+      const res = await fetch(`/api/base/${baseId}/table/${activeTableId}/column/${columnId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error("Failed to delete column");
+
+      setTableData((prev) => {
+        if (!prev) return null;
+
+        const updatedColumns = prev.columns.filter((c) => c.id !== columnId);
+        const updatedRows = prev.rows.map((row) => ({
+          ...row,
+          cells: Array.isArray(row.cells)
+            ? row.cells.filter((cell) => cell.columnId !== columnId)
+            : [],
+        }));
+
+        return {
+          ...prev,
+          columns: updatedColumns,
+          rows: updatedRows,
+        };
+      });
+
+      setSelectedColIndex(null); // Clear selection
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    }
+  }, [baseId, activeTableId]);
+
 
   // function to add new row to the table
-  const handleAddRow = () => {
-    if (!baseId || !activeTableId) return;
-    createRow.mutate({tableId: activeTableId});
-  };
+  const handleAddRow = useCallback(async () => {
+    if (!baseId || !activeTableId || isAddingRow) return;
+    setIsAddingRow(true);
+
+    try {
+      const res = await fetch(`/api/base/${baseId}/table/${activeTableId}/row`, {
+        method: "POST",
+      });
+
+      if (!res.ok) throw new Error("Failed to add row");
+
+      const newRow = await res.json();
+
+      setTableData((prev) => {
+        if (!prev) return null;
+
+        return {
+          ...prev,
+          rows: [...prev.rows, { id: newRow.id, cells: newRow.cells }],
+        };
+      });
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    } finally {
+      setIsAddingRow(false);
+    }
+  }, [baseId, activeTableId, isAddingRow]);
 
   const handleDeleteRow = async (rowId: string) => {
     if (!baseId || !activeTableId) return;
-    deleteRow.mutate({ rowId: rowId});
+
+    try {
+      const res = await fetch(`/api/base/${baseId}/table/${activeTableId}/row/${rowId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error("Failed to delete row");
+
+      setTableData((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          rows: prev.rows.filter((r) => r.id !== rowId),
+        };
+      });
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    }
   };
 
   const handleRenameColumn = async (columnId: string, newName: string) => {
     if (!baseId || !activeTableId) return;
-    renameColumn.mutate({ columnId: columnId, newName: newName});
+
+    try {
+      const res = await fetch(`/api/base/${baseId}/table/${activeTableId}/column/${columnId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newName }),
+      });
+
+      if (!res.ok) throw new Error("Failed to rename column");
+
+      setTableData((prev) => {
+        if (!prev) return null;
+
+        const updatedColumns = prev.columns.map((col) =>
+          col.id === columnId ? { ...col, name: newName } : col
+        );
+
+        return { ...prev, columns: updatedColumns };
+      });
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    }
   };
 
-  const columns: ColumnDef<RowData>[] = useMemo(() => {
-    if (!tableData || !activeTableId) return [];
+  const setCellValue = async (columnId: string, rowId: string) => {
 
-    return tableData.columns.map((col) => ({
+  }
+
+  // return column by its id and name
+  const columns: ColumnDef<Record<string, any>>[] = useMemo(() => {
+    return tableData?.columns.map((col) => ({
       accessorKey: col.id,
       header: col.name,
-      cell: (props: CellContext<RowData, unknown>) => (
-        <EditableCell
-          initialValue={String(props.getValue() ?? "")}
-          tableId={activeTableId}
-          rowId={props.row.id}
-          columnId={props.column.id}
-        />
-      ),
-    }));
-  }, [tableData, activeTableId]);
+      cell: (info) => info.getValue() ?? "",
+    })) ?? [];
+  }, [tableData]);
 
   // Flatten row data for TanStack
   const transformedRows = useMemo(() => {
@@ -303,11 +395,6 @@ export default function BasePage() {
       setActiveCell({ row: rowIndex, col: Math.max(colIndex - 1, 0) });
     }
   };
-
-  
-
-  if (!baseData) return <div>Base not found!</div>;
-  if (!baseData.tables[0]) return <div>No table found!</div>;
 
   return (
     <div className="h-screen flex">
@@ -395,7 +482,7 @@ export default function BasePage() {
           {/* Main Area */}
           <div className="flex-1 flex flex-col">
             <div className="flex items-center bg-[#fff9e8] border-b border-gray-200 px-4 py-2 text-sm relative">
-              {baseData.tables.map((table) => (
+              {tables.map((table) => (
                 <div key={table.id} className="relative mr-2">
                   <div
                     className={`flex items-center px-4 py-1 rounded-t-md border cursor-pointer ${
@@ -567,7 +654,7 @@ export default function BasePage() {
                                 <div className="flex justify-between gap-2">
                                   <button
                                     onClick={() => {
-                                      handleAddColumn();
+                                      handleAddColumn(newColumnName, newColumnType);
                                       setIsAddingColumn(false);
                                       setNewColumnName("");
                                       setNewColumnType("text");
@@ -633,10 +720,65 @@ export default function BasePage() {
                                   {/* Row index */}
                                   <span className="w-5 text-right">{row.index + 1}</span>
 
-                                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                  {/* Editable input */}
+                                  <input
+                                    className={`w-full bg-transparent outline-none px-1 py-0.5 rounded-sm ${
+                                      activeCell?.row === rowIndex && activeCell?.col === index
+                                        ? "border border-blue-500"
+                                        : ""
+                                    }`}
+                                    ref={inputRef}
+                                    value={cell.getValue() == null ? "" : String(cell.getValue())}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      console.log(newValue);
+                                      updateCell({
+                                        rowId: row.original.id,
+                                        columnId: cell.column.id,
+                                        value: newValue,
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      const newValue = e.target.value;
+                                      console.log(newValue);
+                                      updateCell({
+                                        rowId: row.original.id,
+                                        columnId: cell.column.id,
+                                        value: newValue,
+                                      });
+                                    }}
+                                    onKeyDown={(e) => handleKeyDown(e, rowIndex, index)}
+                                    autoFocus={activeCell?.row === rowIndex && activeCell?.col === index}
+                                  />
                                 </div>
                               ) : (
-                                flexRender(cell.column.columnDef.cell, cell.getContext())
+                                <input
+                                  className={`w-full bg-transparent outline-none px-1 py-0.5 rounded-sm ${
+                                    activeCell?.row === rowIndex && activeCell?.col === index
+                                      ? "border border-blue-500"
+                                      : ""
+                                  }`}
+                                  ref={inputRef}
+                                  value={cell.getValue() == null ? "" : String(cell.getValue())}
+                                  onChange={(e) => {
+                                    const newValue = e.target.value;
+                                    updateCell({
+                                      rowId: row.original.id,
+                                      columnId: cell.column.id,
+                                      value: newValue,
+                                    });
+                                  }}
+                                  onBlur={(e) => {
+                                    const newValue = e.target.value;
+                                    updateCell({
+                                      rowId: row.original.id,
+                                      columnId: cell.column.id,
+                                      value: newValue,
+                                    });
+                                  }}
+                                  onKeyDown={(e) => handleKeyDown(e, rowIndex, index)}
+                                  autoFocus={activeCell?.row === rowIndex && activeCell?.col === index}
+                                />
                               )}
 
                               {/* Right-click dropdown for row deletion */}
