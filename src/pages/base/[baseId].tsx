@@ -358,6 +358,13 @@ export default function BasePage() {
     let totalMatches = 0;
     const searchLower = debouncedSearchTerm.toLowerCase();
 
+    // Count matches in column headers
+    tableData.columns.forEach(column => {
+      if (column.name.toLowerCase().includes(searchLower)) {
+        totalMatches++;
+      }
+    });
+
     // Count matches in all cells
     tableData.rows.forEach(row => {
       row.cells.forEach(cell => {
@@ -368,8 +375,8 @@ export default function BasePage() {
       });
     });
 
-  return { totalMatches };
-}, [debouncedSearchTerm, tableData]);
+    return { totalMatches };
+  }, [debouncedSearchTerm, tableData]);
 
   // Create helper to navigate between each cell
  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, rowIndex: number, colIndex: number) => {
@@ -574,7 +581,7 @@ export default function BasePage() {
                           key={header.id}
                           onContextMenu={() => {
                             setSelectedColIndex(index);
-                            setActiveCell({ row: 0, col: index }); // focus first row cell
+                            setActiveCell({ row: 0, col: index });
                             setEditColumnName(header.column.columnDef.header as string);
                           }}
                           className={`relative group border-b border-r border-gray-300 px-2 py-1 text-sm text-gray-800 text-left hover:bg-gray-100 ${
@@ -594,11 +601,25 @@ export default function BasePage() {
                               >
                                 {allSelected ? <CheckSquare className="w-4 h-4 text-gray-700" /> : <Square className="w-4 h-4 text-gray-700" />}
                               </button>
-                              {flexRender(header.column.columnDef.header, header.getContext())}
+                              <span
+                                dangerouslySetInnerHTML={{
+                                  __html: highlightSearchTerm(
+                                    flexRender(header.column.columnDef.header, header.getContext()) as string,
+                                    debouncedSearchTerm
+                                  )
+                                }}
+                              />
                             </div>
                           ) : (
                             <div className="flex items-center justify-between">
-                              {flexRender(header.column.columnDef.header, header.getContext())}
+                              <span
+                                dangerouslySetInnerHTML={{
+                                  __html: highlightSearchTerm(
+                                    flexRender(header.column.columnDef.header, header.getContext()) as string,
+                                    debouncedSearchTerm
+                                  )
+                                }}
+                              />
                                 {selectedColIndex === index && (
                                   <div className="absolute top-full mt-1 right-0 z-10 w-44 bg-white border rounded shadow text-sm p-2">
                                     <div className="mb-2">
