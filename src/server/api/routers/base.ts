@@ -81,6 +81,7 @@ export const baseRouter = createTRPCRouter({
                   name: true,
                   type: true,
                   order: true,
+                  visible: true, 
                 },
               },
               rows: {

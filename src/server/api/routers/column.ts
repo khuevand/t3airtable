@@ -24,7 +24,8 @@ export const columnRouter = createTRPCRouter({
         tableId,
         name,
         type,
-        order: columnCount, // place it at the end
+        order: columnCount,
+        visible: true, 
         },
     });
 
@@ -51,7 +52,7 @@ export const columnRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
         const { columnId } = input;
 
-        // Optional: check if column exists
+        // check if column exists
         const existing = await ctx.db.column.findUnique({
         where: { id: columnId },
     });

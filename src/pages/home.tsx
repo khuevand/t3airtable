@@ -28,6 +28,7 @@ import { useState, useEffect, useCallback } from "react";
 import clsx from "clsx";
 import { toast } from "react-toastify";
 import { formatDistanceToNow } from "date-fns";
+import { api } from "~/utils/api"; // Import the api hooks
 
 function stringToColor(str: string): string {
   let hash = 0;
@@ -41,8 +42,8 @@ function stringToColor(str: string): string {
 type Base = {
   id: string;
   name: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 export default function HomeDashboard() {
@@ -65,64 +66,42 @@ export default function HomeDashboard() {
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
 
-  const handleBuildYourOwnClick = async () => {
-    setIsCreating(true); // 🟦 Changed from setIsBaseLoading
-    try {
-      const res = await fetch("/api/createBase", { method: "POST" });
-      const data = await res.json();
+  const { data: bases = [], refetch } = api.base.getAll.useQuery();
 
-      if (res.ok) {
-        router.push(`/base/${data.baseId}`);
-      } else {
-        alert("Failed to create base.");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("An error occurred.");
-    } finally {
-      setIsCreating(false); // 🟦 Changed from setIsBaseLoading
-    }
+  const deleteBaseMutation = api.base.deleteBase.useMutation();
+
+    // tRPC mutation for creating a new base
+  const createBaseMutation = api.base.createBase.useMutation({
+    onSuccess: (data) => {
+      router.push(`/base/${data.baseId}`);
+      setIsCreating(false);
+    },
+    onError: () => {
+      alert("Failed to create base.");
+      setIsCreating(false);
+    },
+  });
+
+  const handleBuildYourOwnClick = () => {
+    setIsCreating(true);
+    createBaseMutation.mutate();
   };
-
-
-  const [bases, setBases] = useState<Base[]>([]);
-
-  // fetch all bases available under the user account
-  useEffect(() => {
-    const fetchBases = async () => {
-      const res = await fetch("/api/bases");
-      const data = await res.json();
-      setBases(data);
-    };
-    fetchBases();
-  }, []);
 
   const [showMenu, setShowMenu] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const handleDelete = async (base: Base) => {
-    try {
-      const res = await fetch(`/api/base/${base.id}`, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to delete base");
+  const handleDelete = (base: Base) => {
+    deleteBaseMutation.mutate(
+      { baseId: base.id },
+      {
+        onSuccess: () => {
+          toast.success("Base moved to trash.");
+          setShowConfirm(false);
+          refetch();
+        },
+        onError: () => toast.error("Something went wrong while deleting."),
       }
-
-      toast.success("Base moved to trash.");
-      setShowConfirm(false);
-      setTimeout(() => {
-        router.reload();
-      }, 100);
-
-      // Optionally remove the base from local state (if passed as props)
-      // onDelete?.(base.id);
-
-    } catch (error) {
-      console.error(error);
-      toast.error("Something went wrong while deleting.");
-    }
+    );
   };
 
   return (

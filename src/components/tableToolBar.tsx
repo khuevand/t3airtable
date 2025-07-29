@@ -7,6 +7,8 @@ import {
   Menu,
   Grid3X3,
   ChevronDown,
+  ToggleLeft,
+  ToggleRight
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useDebounce } from "use-debounce";
@@ -14,12 +16,16 @@ import { useDebounce } from "use-debounce";
 interface Props {
   onSearchChange?: (value: string) => void;
   searchResult?: { totalMatches: number };
+  onToggleColumnVisibility: (columnId: string) => void; // Pass column visibility toggle function
+  columns: { id: string; name: string }[]; // Pass the columns data to render hide/show options
 }
 
-export default function TableToolbar({ onSearchChange, searchResult }: Props) {
+export default function TableToolbar({ onSearchChange, searchResult, onToggleColumnVisibility, columns }: Props) {
   const [inputValue, setInputValue] = useState("");
   const [debounced] = useDebounce(inputValue, 300);
   const [showSearchBox, setShowSearchBox] = useState(false);
+  const [showHideFields, setShowHideFields] = useState(false);
+  const [selectedColumns, setSelectedColumns] = useState<Record<string, boolean>>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -34,6 +40,15 @@ export default function TableToolbar({ onSearchChange, searchResult }: Props) {
       onSearchChange?.("");
     }
   }, [showSearchBox]);
+
+  const handleToggleColumn = (columnId: string) => {
+    setSelectedColumns((prev) => {
+      const newSelectedColumns = { ...prev };
+      newSelectedColumns[columnId] = !newSelectedColumns[columnId]; // Toggle the visibility
+      onToggleColumnVisibility(columnId); // Update column visibility
+      return newSelectedColumns;
+    });
+  };
 
   return (
     <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 text-sm text-gray-700 bg-white">
@@ -52,10 +67,42 @@ export default function TableToolbar({ onSearchChange, searchResult }: Props) {
 
       {/* Right side - Hide fields, Filter, Sort, and Search */}
       <div className="flex items-center gap-3">
-        <button className="flex items-center gap-1 hover:underline">
+        <button
+          onClick={() => setShowHideFields(!showHideFields)}
+          className="flex items-center gap-1 hover:underline"
+        >
           <EyeOff className="w-4 h-4" />
           Hide fields
         </button>
+
+        {showHideFields && (
+          <div className="absolute right-0 top-8 z-50 w-64 bg-white border rounded shadow px-3 py-2 text-sm">
+            <div className="mb-2">
+              <span className="font-medium text-gray-700">Select Columns to Hide</span>
+              <button onClick={() => setShowHideFields(false)} className="absolute top-0 right-0 text-gray-500">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex flex-col gap-2">
+              {columns.map((column) => (
+                <div key={column.id} className="flex items-center justify-between">
+                  <span>{column.name}</span>
+
+                  <button
+                    onClick={() => handleToggleColumn(column.id)}
+                    className={`p-2 rounded-full ${selectedColumns[column.id] ? 'bg-gray-300' : 'bg-green-400'}`}
+                  >
+                    {selectedColumns[column.id] ? (
+                      <ToggleLeft className="w-4 h-4 text-gray-700" />
+                    ) : (
+                      <ToggleRight className="w-4 h-4 text-gray-700" />
+                    )}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <button className="flex items-center gap-1 hover:underline">
           <ListFilter className="w-4 h-4" />

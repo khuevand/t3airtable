@@ -36,6 +36,7 @@ model Column {
   table   Table  @relation("TableColumns", fields: [tableId], references: [id], onDelete: Cascade)
   order   Int
   cells   Cell[] @relation("ColumnCells")
+  visible   Boolean  @default(true)
 }
 
 model Row {

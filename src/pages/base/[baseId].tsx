@@ -5,6 +5,7 @@ import {
   getCoreRowModel,
   flexRender,
 } from "@tanstack/react-table";
+import { createTRPCRouter } from "~/server/api/trpc";
 import type { CellContext, ColumnDef } from "@tanstack/react-table";
 import { ChevronDown, CheckSquare, Square, Search, Settings, Table, } from "lucide-react";
 import { api } from "~/utils/api";
@@ -23,6 +24,7 @@ interface Column {
   name: string;
   type: string;
   order: number;
+  visible: boolean; // Add this line
 }
 interface Row {
   id: string;
@@ -126,8 +128,13 @@ export default function BasePage() {
   const [editColumnName, setEditColumnName] = useState("");
   const [contextRow, setContextRow] = useState<string | null>(null);
 
+  // boolean value for search function
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm] = useDebounce(searchTerm, 200);
+
+  // boolean value for hide/ show
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
+
   // Fetch base info
   const { data: baseData, isLoading: isBaseLoading, error: baseError } =
     api.base.getBase.useQuery({ baseId });
@@ -142,7 +149,28 @@ export default function BasePage() {
   // Fetch table data only when both baseId and activeTableId are available
   const { data: tableData, isLoading: isTableLoading } = api.table.getTableById.useQuery({ baseId: baseId!, tableId: activeTableId! });
 
+  useEffect(() => {
+    if (!tableData) return;
+
+    // Initialize column visibility based on the fetched 'visible' field
+    const visibilityState = tableData.columns.reduce((acc, col) => {
+      acc[col.id] = col.visible;
+      return acc;
+    }, {} as Record<string, boolean>);
+
+    setColumnVisibility(visibilityState);
+  }, [tableData]);
+
   const addTable = api.table.addTable.useMutation({
+    onError: (e) => {
+      console.error("Delete row error occurred:", e);
+    },
+    onSuccess: () => {
+      void utils.table.getTableById.invalidate();
+    }
+  });
+
+  const updateColumnVisibility = api.table.updateColumnVisibility.useMutation({
     onError: (e) => {
       console.error("Delete row error occurred:", e);
     },
@@ -238,12 +266,12 @@ export default function BasePage() {
     input?.focus();
   }, [activeCell]);
 
-  //  handles the creation of a new table, performs an API request (fetch), 
-  // and updates the component's state with the new table or error message based on the outcome of the request.
-  const handleBlur = (rowId: string, columnId: string, value: string) => {
-    if (!baseId) return;
-    updateCell.mutate({ rowId: rowId, columnId: columnId, value: value });
-  };
+  // //  handles the creation of a new table, performs an API request (fetch), 
+  // // and updates the component's state with the new table or error message based on the outcome of the request.
+  // const handleBlur = (rowId: string, columnId: string, value: string) => {
+  //   if (!baseId) return;
+  //   updateCell.mutate({ rowId: rowId, columnId: columnId, value: value });
+  // };
   
   // wait for the creation of previous table to avoid duplication/ out of order name
   const handleAddTable = async () => {
@@ -314,20 +342,22 @@ export default function BasePage() {
   const columns: ColumnDef<RowData>[] = useMemo(() => {
     if (!tableData || !activeTableId) return [];
 
-    return tableData.columns.map((col) => ({
-      accessorKey: col.id,
-      header: col.name,
-      cell: (props: CellContext<RowData, unknown>) => (
-        <EditableCell
-          initialValue={String(props.getValue() ?? "")}
-          tableId={activeTableId}
-          rowId={props.row.id}
-          columnId={props.column.id}
-          searchTerm={debouncedSearchTerm}
-        />
-      ),
-    }));
-  }, [tableData, activeTableId, debouncedSearchTerm]);
+    return tableData.columns
+      .filter(col => columnVisibility[col.id] !== false) // Only show visible columns
+      .map((col) => ({
+        accessorKey: col.id,
+        header: col.name,
+        cell: (props: CellContext<RowData, unknown>) => (
+          <EditableCell
+            initialValue={String(props.getValue() ?? "")}
+            tableId={activeTableId}
+            rowId={props.row.id}
+            columnId={props.column.id}
+            searchTerm={debouncedSearchTerm}
+          />
+        ),
+      }));
+  }, [tableData, activeTableId, debouncedSearchTerm, columnVisibility]);
 
   // Flatten row data for TanStack
   const transformedRows = useMemo(() => {
@@ -378,27 +408,38 @@ export default function BasePage() {
     return { totalMatches };
   }, [debouncedSearchTerm, tableData]);
 
-  // Create helper to navigate between each cell
- const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, rowIndex: number, colIndex: number) => {
-    const maxRows = table.getRowModel().rows.length;
-    const maxCols = table.getAllColumns().length;
+  const handleToggleColumnVisibility = async (columnId: string) => {
+    const newVisibility = !columnVisibility[columnId];
+    setColumnVisibility((prev) => ({ ...prev, [columnId]: newVisibility }));
 
-    if (["ArrowDown", "ArrowUp", "ArrowRight", "ArrowLeft", "Enter", "Tab"].includes(e.key)) {
-      e.preventDefault(); // Prevent default tab behavior
-    }
-
-    if (e.key === "ArrowDown" || e.key === "Enter") {
-      setActiveCell({ row: Math.min(rowIndex + 1, maxRows - 1), col: colIndex });
-    } else if (e.key === "ArrowUp") {
-      setActiveCell({ row: Math.max(rowIndex - 1, 0), col: colIndex });
-    } else if (e.key === "ArrowRight" || e.key === "Tab") {
-      setActiveCell({ row: rowIndex, col: Math.min(colIndex + 1, maxCols - 1) });
-    } else if (e.key === "ArrowLeft") {
-      setActiveCell({ row: rowIndex, col: Math.max(colIndex - 1, 0) });
-    }
+    // Use the already defined mutation hook
+    updateColumnVisibility.mutate({
+      columnId,
+      visible: newVisibility,
+    });
   };
 
-    // Handle loading
+  // Create helper to navigate between each cell
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, rowIndex: number, colIndex: number) => {
+      const maxRows = table.getRowModel().rows.length;
+      const maxCols = table.getAllColumns().length;
+
+      if (["ArrowDown", "ArrowUp", "ArrowRight", "ArrowLeft", "Enter", "Tab"].includes(e.key)) {
+        e.preventDefault(); // Prevent default tab behavior
+      }
+
+      if (e.key === "ArrowDown" || e.key === "Enter") {
+        setActiveCell({ row: Math.min(rowIndex + 1, maxRows - 1), col: colIndex });
+      } else if (e.key === "ArrowUp") {
+        setActiveCell({ row: Math.max(rowIndex - 1, 0), col: colIndex });
+      } else if (e.key === "ArrowRight" || e.key === "Tab") {
+        setActiveCell({ row: rowIndex, col: Math.min(colIndex + 1, maxCols - 1) });
+      } else if (e.key === "ArrowLeft") {
+        setActiveCell({ row: rowIndex, col: Math.max(colIndex - 1, 0) });
+      }
+    };
+
+      // Handle loading
   if (isBaseLoading) {
     return (
       <div className="h-screen flex items-center justify-center text-gray-500 text-sm">
@@ -547,6 +588,8 @@ export default function BasePage() {
         <TableToolbar 
           onSearchChange={handleSearchChange} 
           searchResult={searchResults}
+          onToggleColumnVisibility={handleToggleColumnVisibility}
+          columns={tableData?.columns || []}
         />
 
         {/* Main Content with Sidebar and Table */}
