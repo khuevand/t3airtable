@@ -28,7 +28,7 @@ import { useState, useEffect, useCallback } from "react";
 import clsx from "clsx";
 import { toast } from "react-toastify";
 import { formatDistanceToNow } from "date-fns";
-import { api } from "~/utils/api"; // Import the api hooks
+import { api } from "~/utils/api";
 
 function stringToColor(str: string): string {
   let hash = 0;

@@ -75,4 +75,21 @@ export const columnRouter = createTRPCRouter({
       });
       return { success: true };
     }),
+  
+  getColumns: privateProcedure
+  .input(z.object({ tableId: z.string() }))
+  .query(async ({ ctx, input }) => {
+    const { tableId } = input;
+
+    const columns = await ctx.db.column.findMany({
+      where: { tableId },
+      select: { id: true, name: true },
+    });
+
+    if (!columns) {
+      throw new Error("Columns not found");
+    }
+
+    return columns;
+  }),
 });

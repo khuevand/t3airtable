@@ -135,6 +135,9 @@ export default function BasePage() {
   // boolean value for hide/ show
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
 
+  // boolean value for filter
+  const [filteredData, setFilteredData] = useState<any[]>([]);
+
   // Fetch base info
   const { data: baseData, isLoading: isBaseLoading, error: baseError } =
     api.base.getBase.useQuery({ baseId });
@@ -419,6 +422,19 @@ export default function BasePage() {
     });
   };
 
+  const handleFilteredDataChange = (data: any[] | null) => {
+    if (data) {
+      setFilteredData(data);  // Update the filtered data
+    } else {
+      // Check if tableData is undefined, then reset the state accordingly
+      if (tableData) {
+        setFilteredData(tableData.rows);  // Assuming tableData.rows contains the rows you want to display
+      } else {
+        setFilteredData([]);  // If tableData is undefined, reset to an empty array
+      }
+    }
+  };
+
   // Create helper to navigate between each cell
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, rowIndex: number, colIndex: number) => {
       const maxRows = table.getRowModel().rows.length;
@@ -590,6 +606,9 @@ export default function BasePage() {
           searchResult={searchResults}
           onToggleColumnVisibility={handleToggleColumnVisibility}
           columns={tableData?.columns || []}
+          tableId={tableData?.id || ""}
+          data={filteredData}  // Pass filteredData to the table
+          onFilteredDataChange={handleFilteredDataChange}
         />
 
         {/* Main Content with Sidebar and Table */}
@@ -762,88 +781,174 @@ export default function BasePage() {
                     </tr>
                   ))}
                 </thead>
+                  <tbody>
+                    {/* Render filtered data if available, otherwise render normal table data */}
+                    {filteredData && filteredData.length > 0 ? (
+                      // Filtered data rendering
+                      filteredData.map((rowData, rowIndex) => (
+                        <tr key={rowData.id} className="hover:bg-gray-100">
+                          {table.getAllColumns().filter(col => col.getIsVisible()).map((column, index) => (
+                            <td
+                              key={`${rowData.id}-${column.id}`}
+                              data-row={rowIndex}
+                              data-col={index}
+                              onContextMenu={(e) => {
+                                if (index === 0) {
+                                  e.preventDefault();
+                                  setContextRow(rowData.id);
+                                }
+                              }}
+                              className={`relative border-t border-r border-gray-200 px-2 py-1 text-sm last:border-r-0 ${
+                                selectedColIndex === index || selectedRows.has(rowData.id)
+                                  ? "bg-gray-100"
+                                  : ""
+                              }`}
+                            >
+                              {index === 0 ? (
+                                <div className="flex items-center gap-2 text-gray-700">
+                                  {/* Checkbox */}
+                                  <button
+                                    onClick={() => {
+                                      const newSet = new Set(selectedRows);
+                                      newSet.has(rowData.id) ? newSet.delete(rowData.id) : newSet.add(rowData.id);
+                                      setSelectedRows(newSet);
+                                      setAllSelected(newSet.size === filteredData.length);
+                                    }}
+                                  >
+                                    {selectedRows.has(rowData.id) ? (
+                                      <CheckSquare className="w-4 h-4 text-gray-700" />
+                                    ) : (
+                                      <Square className="w-4 h-4 text-gray-700" />
+                                    )}
+                                  </button>
 
-                <tbody>
-                  {table.getRowModel().rows.map((row, rowIndex) => (
-                    <tr key={row.id} className="hover:bg-gray-100">
-                      {row.getVisibleCells().map((cell, index) => (
-                        <td
-                          key={cell.id}
-                          data-row={rowIndex}
-                          data-col={index}
-                          onContextMenu={(e) => {
-                            if (index === 0) {
-                              e.preventDefault();
-                              setContextRow(row.id);
-                            }
-                          }}
-                          className={`relative border-t border-r border-gray-200 px-2 py-1 text-sm last:border-r-0 ${
-                            selectedColIndex === index || selectedRows.has(row.id)
-                              ? "bg-gray-100"
-                              : ""
-                          }`}
-                        >
-                          {index === 0 ? (
-                            <div className="flex items-center gap-2 text-gray-700">
-                              {/* Checkbox */}
-                              <button
-                                onClick={() => {
-                                  const newSet = new Set(selectedRows);
-                                  newSet.has(row.id) ? newSet.delete(row.id) : newSet.add(row.id);
-                                  setSelectedRows(newSet);
-                                  setAllSelected(newSet.size === table.getRowModel().rows.length);
-                                }}
-                              >
-                                {selectedRows.has(row.id) ? (
-                                  <CheckSquare className="w-4 h-4 text-gray-700" />
-                                ) : (
-                                  <Square className="w-4 h-4 text-gray-700" />
-                                )}
-                              </button>
+                                  {/* Row index */}
+                                  <span className="w-5 text-right">{rowIndex + 1}</span>
 
-                              {/* Row index */}
-                              <span className="w-5 text-right">{row.index + 1}</span>
+                                  {/* Cell content - find the cell data for this column */}
+                                  {rowData.cells?.find((cell: any) => cell.columnId === column.id)?.value || ''}
+                                </div>
+                              ) : (
+                                // Non-first column - display cell content
+                                rowData.cells?.find((cell: any) => cell.columnId === column.id)?.value || ''
+                              )}
 
-                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                            </div>
-                          ) : (
-                            flexRender(cell.column.columnDef.cell, cell.getContext())
-                          )}
-
-                          {/* Right-click dropdown for row deletion */}
-                          {contextRow === row.id && index === 0 && (
-                            <div className="absolute z-10 top-full left-0 bg-white border rounded shadow text-sm px-2 py-1 w-32">
-                              <button
-                                className="text-red-500 hover:underline text-xs w-full text-left"
-                                onClick={() => {
-                                  const confirmDelete = confirm("Are you sure you want to delete this row?");
-                                  if (confirmDelete) {
-                                    console.log("Deleting row:", row);
-                                    console.log("row.id being sent to API:", row.id);
-                                    handleDeleteRow(row.id);
-                                    setContextRow(null);
-                                  }
-                                }}
-                              >
-                                Delete row
-                              </button>
-                            </div>
-                          )}
+                              {/* Right-click dropdown for row deletion */}
+                              {contextRow === rowData.id && index === 0 && (
+                                <div className="absolute z-10 top-full left-0 bg-white border rounded shadow text-sm px-2 py-1 w-32">
+                                  <button
+                                    className="text-red-500 hover:underline text-xs w-full text-left"
+                                    onClick={() => {
+                                      const confirmDelete = confirm("Are you sure you want to delete this row?");
+                                      if (confirmDelete) {
+                                        console.log("Deleting row:", rowData);
+                                        console.log("row.id being sent to API:", rowData.id);
+                                        handleDeleteRow(rowData.id);
+                                        setContextRow(null);
+                                      }
+                                    }}
+                                  >
+                                    Delete row
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    ) : filteredData !== null && filteredData.length === 0 ? (
+                      // No results found for filter
+                      <tr>
+                        <td colSpan={columns.length} className="text-center py-8 text-gray-500">
+                          No rows match the applied filters
                         </td>
-                      ))}
-                    </tr>
-                  ))}
+                      </tr>
+                    ) : (
+                      // Normal table data rendering (when no filter is applied)
+                      table.getRowModel().rows.map((row, rowIndex) => (
+                        <tr key={row.id} className="hover:bg-gray-100">
+                          {row.getVisibleCells().map((cell, index) => (
+                            <td
+                              key={cell.id}
+                              data-row={rowIndex}
+                              data-col={index}
+                              onContextMenu={(e) => {
+                                if (index === 0) {
+                                  e.preventDefault();
+                                  setContextRow(row.id);
+                                }
+                              }}
+                              className={`relative border-t border-r border-gray-200 px-2 py-1 text-sm last:border-r-0 ${
+                                selectedColIndex === index || selectedRows.has(row.id)
+                                  ? "bg-gray-100"
+                                  : ""
+                              }`}
+                            >
+                              {index === 0 ? (
+                                <div className="flex items-center gap-2 text-gray-700">
+                                  {/* Checkbox */}
+                                  <button
+                                    onClick={() => {
+                                      const newSet = new Set(selectedRows);
+                                      newSet.has(row.id) ? newSet.delete(row.id) : newSet.add(row.id);
+                                      setSelectedRows(newSet);
+                                      setAllSelected(newSet.size === table.getRowModel().rows.length);
+                                    }}
+                                  >
+                                    {selectedRows.has(row.id) ? (
+                                      <CheckSquare className="w-4 h-4 text-gray-700" />
+                                    ) : (
+                                      <Square className="w-4 h-4 text-gray-700" />
+                                    )}
+                                  </button>
 
-                  {/* Add Row Button */}
-                  <tr>
-                    <td
-                      colSpan={columns.length}
-                      className="text-center py-3 text-sm text-gray-500 hover:bg-gray-100 cursor-pointer"
-                    >
-                      <button onClick={handleAddRow}>+ Add row</button>
-                    </td>
-                  </tr>
-                </tbody>
+                                  {/* Row index */}
+                                  <span className="w-5 text-right">{row.index + 1}</span>
+
+                                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                </div>
+                              ) : (
+                                flexRender(cell.column.columnDef.cell, cell.getContext())
+                              )}
+
+                              {/* Right-click dropdown for row deletion */}
+                              {contextRow === row.id && index === 0 && (
+                                <div className="absolute z-10 top-full left-0 bg-white border rounded shadow text-sm px-2 py-1 w-32">
+                                  <button
+                                    className="text-red-500 hover:underline text-xs w-full text-left"
+                                    onClick={() => {
+                                      const confirmDelete = confirm("Are you sure you want to delete this row?");
+                                      if (confirmDelete) {
+                                        console.log("Deleting row:", row);
+                                        console.log("row.id being sent to API:", row.id);
+                                        handleDeleteRow(row.id);
+                                        setContextRow(null);
+                                      }
+                                    }}
+                                  >
+                                    Delete row
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    )}
+
+                    {/* Add Row Button - only show when no filter is applied */}
+                    {(!filteredData || filteredData === null) && (
+                      <tr>
+                        <td
+                          colSpan={columns.length}
+                          className="text-center py-3 text-sm text-gray-500 hover:bg-gray-100 cursor-pointer"
+                        >
+                          <button onClick={handleAddRow}>+ Add row</button>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+
               </table>
             ) : (
               <p className="text-gray-500">No table selected.</p>

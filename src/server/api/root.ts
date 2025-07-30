@@ -4,6 +4,7 @@ import { tableRouter } from "./routers/table";
 import { rowRouter } from "./routers/row";
 import { columnRouter } from "./routers/column";
 import { baseRouter } from "./routers/base";
+import { filterRouter } from "./routers/filterRowByCondtion";
 
 /**
  * This is the primary router for your server.
@@ -15,7 +16,8 @@ export const appRouter = createTRPCRouter({
   row: rowRouter,
   column: columnRouter,
   table: tableRouter,
-  cell: cellRouter
+  cell: cellRouter,
+  filter: filterRouter
 });
 
 // export type definition of API
