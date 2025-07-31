@@ -19,9 +19,16 @@ interface Props {
   searchResult?: { totalMatches: number };
   onToggleColumnVisibility: (columnId: string) => void;
   columns: { id: string; name: string }[];
-  data: any[];
-  onFilteredDataChange?: (filteredData: any[] | null) => void;
+  data: any[] | null;
+  onFilteredDataChange: (filteredData: any[] | null) => void;
   tableId: string;
+}
+
+// FIXED: Define proper filter interface
+interface FilterCondition {
+  columnId: string;
+  operator: string;
+  value: string;
 }
 
 export default function TableToolbar({
@@ -39,7 +46,10 @@ export default function TableToolbar({
   const [showHideFields, setShowHideFields] = useState(false);
   const [selectedColumns, setSelectedColumns] = useState<Record<string, boolean>>({});
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  const [filters, setFilters] = useState<any[]>([]);
+  
+  // FIXED: Use proper type for filters
+  const [filters, setFilters] = useState<FilterCondition[]>([]);
+  const [logicalOperator, setLogicalOperator] = useState<'AND' | 'OR'>('AND');
   const [selectedColumn, setSelectedColumn] = useState<string>("");
   const [selectedOperator, setSelectedOperator] = useState<string>("contains");
   const [filterValue, setFilterValue] = useState<string>("");
@@ -48,7 +58,24 @@ export default function TableToolbar({
   const hideFieldsRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  const filterRecordsMutation = api.filter.getFilteredRecords.useMutation();
+  // FIXED: Use the enhanced filter mutation with logicalOperator support
+  const filterRecordsMutation = api.filter.getFilteredRecords.useMutation({
+    onSuccess: (data) => {
+      onFilteredDataChange(data);
+    },
+    onError: (error) => {
+      console.error('Filter error:', error);
+      onFilteredDataChange(null); // Reset on error
+    }
+  });
+
+  useEffect(() => {
+    // Reset everything when table changes
+    setSelectedColumn("");
+    setSelectedOperator("contains");
+    setFilterValue("");
+  }, [tableId]);
+
 
   useEffect(() => {
     if (onSearchChange) onSearchChange(debounced);
@@ -74,76 +101,94 @@ export default function TableToolbar({
     return !["is empty", "is not empty"].includes(operator);
   };
 
+  // FIXED: Add filter function with proper validation
   const addFilter = () => {
-    const requiresValue = operatorRequiresValue(selectedOperator);
+    if (!selectedColumn) return;
+    if (operatorRequiresValue(selectedOperator) && !filterValue.trim()) return;
+
+    const newFilter: FilterCondition = {
+      columnId: selectedColumn,
+      operator: selectedOperator,
+      value: operatorRequiresValue(selectedOperator) ? filterValue : '',
+    };
+
+    setFilters(prevFilters => [...prevFilters, newFilter]);
     
-    if (selectedColumn && (filterValue || !requiresValue)) {
-      const selectedColumnData = columns.find((col) => col.id === selectedColumn);
-      if (selectedColumnData) {
-        setFilters((prevFilters) => [
-          ...prevFilters,
-          {
-            columnId: selectedColumn,
-            columnName: selectedColumnData.name,
-            operator: selectedOperator,
-            value: requiresValue ? filterValue : "", // Empty string for empty/not empty operators
-          },
-        ]);
-        setFilterValue("");
-        setSelectedColumn("");
-        setSelectedOperator("contains");
-      }
-    }
+    // Reset form
+    setSelectedColumn("");
+    setSelectedOperator("contains");
+    setFilterValue("");
   };
 
+  // FIXED: Apply filters with logicalOperator support
   const applyFilters = async () => {
+    if (filters.length === 0) {
+      // No filters - reset to show all data
+      onFilteredDataChange(null);
+      return;
+    }
+
     try {
       console.log("Applying filters:", filters);
-      
-      const filtersForApi = filters.map(({ columnId, operator, value }) => ({
-        columnId,
-        operator,
-        value,
-      }));
-
-      console.log("Filters for API:", filtersForApi);
+      console.log("Logical operator:", logicalOperator);
       
       const result = await filterRecordsMutation.mutateAsync({
-        tableId: tableId, 
-        filters: filtersForApi 
+        tableId: tableId,
+        filters: filters,
+        logicalOperator: logicalOperator,
       });
       
       console.log("Filter result:", result);
-      
-      if (onFilteredDataChange) {
-        onFilteredDataChange(result);
-      }
-      
     } catch (error) {
       console.error("Error applying filters:", error);
     }
   };
 
-  const clearAllFilters = async () => {
+  // FIXED: Update filter function with proper typing
+  const updateFilter = (index: number, field: keyof FilterCondition, value: string) => {
+    setFilters(prevFilters => {
+      const newFilters = [...prevFilters];
+      // Ensure the index exists
+      if (index >= 0 && index < newFilters.length && newFilters[index]) {
+        // Create a new filter object with the updated field
+        const currentFilter = newFilters[index];
+        newFilters[index] = {
+          columnId: field === 'columnId' ? value : currentFilter.columnId,
+          operator: field === 'operator' ? value : currentFilter.operator,
+          value: field === 'value' ? value : currentFilter.value,
+        };
+      }
+      return newFilters;
+    });
+  };
+
+  const removeFilter = (index: number) => {
+    setFilters(prevFilters => {
+      const newFilters = prevFilters.filter((_, i) => i !== index);
+      
+      // FIXED: If no filters left, immediately reset the table data
+      if (newFilters.length === 0) {
+        onFilteredDataChange(null);
+      }
+      
+      return newFilters;
+    });
+  };
+
+  // FIXED: Clear all filters function
+  const clearAllFilters = () => {
     setFilters([]);
     setSelectedColumn("");
     setSelectedOperator("contains");
     setFilterValue("");
-    
-    if (onFilteredDataChange) {
-      onFilteredDataChange(null);
-    }
+    setLogicalOperator('AND');
+    // FIXED: Immediately reset filtered data to show all table data
+    onFilteredDataChange(null);
   };
 
-  const removeFilter = (index: number) => {
-    const newFilters = filters.filter((_, i) => i !== index);
-    setFilters(newFilters);
-    
-    if (newFilters.length === 0) {
-      if (onFilteredDataChange) {
-        onFilteredDataChange(null);
-      }
-    }
+  // FIXED: Get column name for display
+  const getColumnName = (columnId: string) => {
+    return columns.find(col => col.id === columnId)?.name || columnId;
   };
 
   useEffect(() => {
@@ -223,13 +268,13 @@ export default function TableToolbar({
             )}
           </div>
 
-          {/* Filter Button */}
+          {/* Filter Button - FIXED: Show filter count */}
           <button
             onClick={handleFilterButtonClick}
             className={`flex items-center gap-1 hover:underline ${showFilterDropdown ? 'text-blue-600' : ''}`}
           >
             <ListFilter className="w-4 h-4" />
-            Filter
+            Filter {filters.length > 0 && `(${filters.length})`}
           </button>
 
           <button className="flex items-center gap-1 hover:underline">
@@ -291,14 +336,51 @@ export default function TableToolbar({
               </button>
             </div>
 
+            {/* FIXED: Logical Operator Selection - Only show if multiple filters */}
+            {filters.length > 1 && (
+              <div className="mb-4 p-3 bg-gray-50 rounded border">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Show rows that match:
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="logicalOperator"
+                      value="AND"
+                      checked={logicalOperator === 'AND'}
+                      onChange={(e) => setLogicalOperator(e.target.value as 'AND' | 'OR')}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">All conditions (AND)</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="logicalOperator"
+                      value="OR"
+                      checked={logicalOperator === 'OR'}
+                      onChange={(e) => setLogicalOperator(e.target.value as 'AND' | 'OR')}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">Any condition (OR)</span>
+                  </label>
+                </div>
+              </div>
+            )}
+
             {/* Show applied filters */}
             {filters.length > 0 && (
               <div className="mb-3">
                 <div className="text-xs text-gray-600 mb-2">Applied Filters:</div>
                 {filters.map((filter, index) => (
                   <div key={index} className="flex items-center justify-between bg-gray-50 px-2 py-1 rounded text-xs mb-1">
+                    {/* Show AND/OR indicator between filters */}
                     <span>
-                      {filter.columnName} {filter.operator} 
+                      {index > 0 && (
+                        <span className="text-gray-500 mr-1">{logicalOperator}</span>
+                      )}
+                      {getColumnName(filter.columnId)} {filter.operator} 
                       {operatorRequiresValue(filter.operator) ? ` "${filter.value}"` : ''}
                     </span>
                     <button
@@ -327,7 +409,7 @@ export default function TableToolbar({
                 ))}
               </select>
 
-              {/* Operator Dropdown - Now includes empty/not empty */}
+              {/* Operator Dropdown */}
               <select
                 value={selectedOperator}
                 onChange={(e) => setSelectedOperator(e.target.value)}
@@ -356,7 +438,7 @@ export default function TableToolbar({
             <div className="flex gap-2 mt-3">
               <button
                 onClick={addFilter}
-                disabled={!selectedColumn || (operatorRequiresValue(selectedOperator) && !filterValue)}
+                disabled={!selectedColumn || (operatorRequiresValue(selectedOperator) && !filterValue.trim())}
                 className="px-3 py-1.5 bg-blue-600 text-white rounded text-xs flex-1 disabled:bg-gray-300"
               >
                 Add Filter

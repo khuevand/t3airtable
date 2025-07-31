@@ -7,7 +7,7 @@ export const filterRouter = createTRPCRouter({
   getFilteredRecords: privateProcedure
     .input(
       z.object({
-        tableId: z.string(), // Add tableId to input
+        tableId: z.string(),
         filters: z.array(
           z.object({
             columnId: z.string(),
@@ -15,10 +15,12 @@ export const filterRouter = createTRPCRouter({
             value: z.string(),
           })
         ),
+        // Add logical operator for combining filters
+        logicalOperator: z.enum(['AND', 'OR']).default('AND'),
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const { filters, tableId } = input; // Destructure tableId from input
+      const { filters, tableId, logicalOperator } = input;
 
       if (filters.length === 0) {
         // If no filters, return all rows for the table
@@ -141,19 +143,35 @@ export const filterRouter = createTRPCRouter({
         }
       };
 
-      // Build the where clause properly for multiple filters
+      // Build the where clause with support for AND/OR logic
       let whereClause: Prisma.RowWhereInput;
 
       if (filters.length > 1) {
-        // Handle multiple filters with AND logic
+        // Handle multiple filters with specified logical operator
         const filterConditions = filters
           .map((filter) => buildFilterCondition(filter.columnId, filter.operator, filter.value))
           .filter((condition) => Object.keys(condition).length > 0);
 
-        whereClause = {
-          tableId: tableId,
-          AND: filterConditions,
-        };
+        if (filters.length > 1) {
+          const filterConditions = filters
+            .map((filter) => ({
+              tableId: tableId, // ✅ Include tableId in each condition
+              ...buildFilterCondition(filter.columnId, filter.operator, filter.value),
+            }))
+            .filter((condition) => Object.keys(condition).length > 0);
+
+          whereClause = {
+            [logicalOperator]: filterConditions,
+          };
+        } else {
+          const filter = filters[0]!;
+          const filterCondition = buildFilterCondition(filter.columnId, filter.operator, filter.value);
+          whereClause = {
+            tableId: tableId,
+            ...filterCondition,
+          };
+        }
+
       } else {
         // Handle single filter
         const filter = filters[0]!;
@@ -178,7 +196,7 @@ export const filterRouter = createTRPCRouter({
             },
           },
           orderBy: {
-            id: 'asc', // Use 'id' instead of 'createdAt'
+            id: 'asc',
           },
         });
 

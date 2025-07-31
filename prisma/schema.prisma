@@ -50,7 +50,7 @@ model Cell {
   id       String @id @default(cuid())
   rowId    String
   columnId String
-  value    Json
+  value    String?
   row    Row    @relation("RowCells", fields: [rowId], references: [id], onDelete: Cascade)
   column Column @relation("ColumnCells", fields: [columnId], references: [id], onDelete: Cascade)
 }

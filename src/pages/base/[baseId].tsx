@@ -65,13 +65,27 @@ const EditableCell: React.FC<EditableCellProps & { searchTerm?: string }> = ({
   const utils = api.useUtils();
   const updateCell = api.cell.updateCell.useMutation();
 
+ useEffect(() => {
+  if (!isEditing) {
+    setValue(initialValue);
+    }
+  }, [initialValue, isEditing]);
+
   const handleBlur = () => {
     setIsEditing(false);
     if (value !== initialValue) {
       updateCell.mutate(
         { rowId, columnId, value },
         {
-          onSuccess: () => utils.table.getTableById.invalidate({ tableId }),
+          onSuccess: () => {
+            // Invalidate the query to refresh the data
+            utils.table.getTableById.invalidate({ tableId });
+          },
+          onError: (error) => {
+            // If update fails, revert to the original value
+            console.error('Failed to update cell:', error);
+            setValue(initialValue);
+          }
         }
       );
     }
@@ -79,6 +93,16 @@ const EditableCell: React.FC<EditableCellProps & { searchTerm?: string }> = ({
 
   const handleFocus = () => {
     setIsEditing(true);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleBlur();
+    }
+    if (e.key === 'Escape') {
+      setValue(initialValue); // Reset to original value
+      setIsEditing(false);
+    }
   };
 
   // Show highlighted text when not editing, regular input when editing
@@ -89,6 +113,7 @@ const EditableCell: React.FC<EditableCellProps & { searchTerm?: string }> = ({
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
         autoFocus
       />
     );
@@ -136,7 +161,15 @@ export default function BasePage() {
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
 
   // boolean value for filter
-  const [filteredData, setFilteredData] = useState<any[]>([]);
+  const [filteredData, setFilteredData] = useState<any[] | null>(null);
+  const isColumnOperationRef = useRef(false);
+
+  const [columnContextMenu, setColumnContextMenu] = useState<{
+    columnId: string;
+    columnName: string;
+    index: number;
+  } | null>(null);
+
 
   // Fetch base info
   const { data: baseData, isLoading: isBaseLoading, error: baseError } =
@@ -162,6 +195,13 @@ export default function BasePage() {
     }, {} as Record<string, boolean>);
 
     setColumnVisibility(visibilityState);
+  }, [tableData]);
+
+  useEffect(() => {
+    if (tableData) {
+      // Reset filtered data when table data loads
+      setFilteredData(null); // null means no filter applied
+    }
   }, [tableData]);
 
   const addTable = api.table.addTable.useMutation({
@@ -250,17 +290,22 @@ export default function BasePage() {
     toast.dismiss();
   };
 
+    // Modify the click outside handler
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (tableRef.current && !tableRef.current.contains(e.target as Node)) {
         setSelectedRows(new Set());
         setAllSelected(false);
-        setSelectedColIndex(null);
+        // Only reset column selection if we're not in a column operation
+        if (!isColumnOperationRef.current) {
+          setSelectedColIndex(null);
+          setColumnContextMenu(null);
+        }
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [])
 
   useEffect(() => {
     const input = document.querySelector(
@@ -269,13 +314,6 @@ export default function BasePage() {
     input?.focus();
   }, [activeCell]);
 
-  // //  handles the creation of a new table, performs an API request (fetch), 
-  // // and updates the component's state with the new table or error message based on the outcome of the request.
-  // const handleBlur = (rowId: string, columnId: string, value: string) => {
-  //   if (!baseId) return;
-  //   updateCell.mutate({ rowId: rowId, columnId: columnId, value: value });
-  // };
-  
   // wait for the creation of previous table to avoid duplication/ out of order name
   const handleAddTable = async () => {
     if (!baseId) return;
@@ -314,15 +352,44 @@ export default function BasePage() {
     }
   };
 
+  const handleColumnHeaderClick = (columnId: string, columnName: string, index: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    isColumnOperationRef.current = true;
+    setSelectedColIndex(index);
+    setColumnContextMenu({
+      columnId,
+      columnName,
+      index
+    });
+    setEditColumnName(columnName);
+
+    // Reset the ref after a short delay
+    setTimeout(() => {
+      isColumnOperationRef.current = false;
+    }, 100);
+  };
 
   const handleAddColumn = () => {
     if (!baseId || !activeTableId) return;
     createColumn.mutate({ tableId: activeTableId, name: newColumnName, type: newColumnType});
   };
 
-  const handleDeleteColumn = ( columnId: string ) => {
+  const handleDeleteColumn = async (columnId: string) => {
     if (!baseId || !activeTableId) return;
-    removeColumn.mutate({ columnId });
+    
+    isColumnOperationRef.current = true;
+    
+    try {
+      await removeColumn.mutateAsync({ columnId });
+      setSelectedColIndex(null);
+      setColumnContextMenu(null);
+    } finally {
+      setTimeout(() => {
+        isColumnOperationRef.current = false;
+      }, 100);
+    }
   };
 
   // function to add new row to the table
@@ -336,12 +403,24 @@ export default function BasePage() {
     deleteRow.mutate({ rowId: rowId});
   };
 
+  // Modify column operations to not reset selection immediately
   const handleRenameColumn = async (columnId: string, newName: string) => {
     if (!baseId || !activeTableId) return;
-    renameColumn.mutate({ columnId: columnId, newName: newName});
+    
+    isColumnOperationRef.current = true;
+    
+    try {
+      await renameColumn.mutateAsync({ columnId: columnId, newName: newName });
+      // Don't reset selection immediately, let the user close it manually
+    } finally {
+      setTimeout(() => {
+        isColumnOperationRef.current = false;
+      }, 500);
+    }
   };
 
-  // 4. Update your columns definition to pass search term
+
+  // Update your columns definition
   const columns: ColumnDef<RowData>[] = useMemo(() => {
     if (!tableData || !activeTableId) return [];
 
@@ -422,38 +501,11 @@ export default function BasePage() {
     });
   };
 
+  
+
   const handleFilteredDataChange = (data: any[] | null) => {
-    if (data) {
-      setFilteredData(data);  // Update the filtered data
-    } else {
-      // Check if tableData is undefined, then reset the state accordingly
-      if (tableData) {
-        setFilteredData(tableData.rows);  // Assuming tableData.rows contains the rows you want to display
-      } else {
-        setFilteredData([]);  // If tableData is undefined, reset to an empty array
-      }
-    }
+    setFilteredData(data); // data will be null when no filter is applied
   };
-
-  // Create helper to navigate between each cell
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, rowIndex: number, colIndex: number) => {
-      const maxRows = table.getRowModel().rows.length;
-      const maxCols = table.getAllColumns().length;
-
-      if (["ArrowDown", "ArrowUp", "ArrowRight", "ArrowLeft", "Enter", "Tab"].includes(e.key)) {
-        e.preventDefault(); // Prevent default tab behavior
-      }
-
-      if (e.key === "ArrowDown" || e.key === "Enter") {
-        setActiveCell({ row: Math.min(rowIndex + 1, maxRows - 1), col: colIndex });
-      } else if (e.key === "ArrowUp") {
-        setActiveCell({ row: Math.max(rowIndex - 1, 0), col: colIndex });
-      } else if (e.key === "ArrowRight" || e.key === "Tab") {
-        setActiveCell({ row: rowIndex, col: Math.min(colIndex + 1, maxCols - 1) });
-      } else if (e.key === "ArrowLeft") {
-        setActiveCell({ row: rowIndex, col: Math.max(colIndex - 1, 0) });
-      }
-    };
 
       // Handle loading
   if (isBaseLoading) {
@@ -781,10 +833,12 @@ export default function BasePage() {
                     </tr>
                   ))}
                 </thead>
-                  <tbody>
-                    {/* Render filtered data if available, otherwise render normal table data */}
-                    {filteredData && filteredData.length > 0 ? (
-                      // Filtered data rendering
+                <tbody>
+                  {/* Check if filter is applied and has results */}
+                  {filteredData !== null ? (
+                    // Filter is applied
+                    filteredData.length > 0 ? (
+                      // Filter has results - render filtered data
                       filteredData.map((rowData, rowIndex) => (
                         <tr key={rowData.id} className="hover:bg-gray-100">
                           {table.getAllColumns().filter(col => col.getIsVisible()).map((column, index) => (
@@ -825,12 +879,24 @@ export default function BasePage() {
                                   {/* Row index */}
                                   <span className="w-5 text-right">{rowIndex + 1}</span>
 
-                                  {/* Cell content - find the cell data for this column */}
-                                  {rowData.cells?.find((cell: any) => cell.columnId === column.id)?.value || ''}
+                                  {/* Cell content using EditableCell component */}
+                                  <EditableCell
+                                    initialValue={String(rowData.cells?.find((cell: any) => cell.columnId === column.id)?.value || '')}
+                                    tableId={activeTableId!}
+                                    rowId={rowData.id}
+                                    columnId={column.id}
+                                    searchTerm={debouncedSearchTerm}
+                                  />
                                 </div>
                               ) : (
-                                // Non-first column - display cell content
-                                rowData.cells?.find((cell: any) => cell.columnId === column.id)?.value || ''
+                                // Non-first column - use EditableCell component
+                                <EditableCell
+                                  initialValue={String(rowData.cells?.find((cell: any) => cell.columnId === column.id)?.value || '')}
+                                  tableId={activeTableId!}
+                                  rowId={rowData.id}
+                                  columnId={column.id}
+                                  searchTerm={debouncedSearchTerm}
+                                />
                               )}
 
                               {/* Right-click dropdown for row deletion */}
@@ -841,8 +907,6 @@ export default function BasePage() {
                                     onClick={() => {
                                       const confirmDelete = confirm("Are you sure you want to delete this row?");
                                       if (confirmDelete) {
-                                        console.log("Deleting row:", rowData);
-                                        console.log("row.id being sent to API:", rowData.id);
                                         handleDeleteRow(rowData.id);
                                         setContextRow(null);
                                       }
@@ -856,16 +920,18 @@ export default function BasePage() {
                           ))}
                         </tr>
                       ))
-                    ) : filteredData !== null && filteredData.length === 0 ? (
-                      // No results found for filter
+                    ) : (
+                      // Filter applied but no results
                       <tr>
                         <td colSpan={columns.length} className="text-center py-8 text-gray-500">
                           No rows match the applied filters
                         </td>
                       </tr>
-                    ) : (
-                      // Normal table data rendering (when no filter is applied)
-                      table.getRowModel().rows.map((row, rowIndex) => (
+                    )
+                  ) : (
+                    // No filter applied - show normal table data
+                    <>
+                      {table.getRowModel().rows.map((row, rowIndex) => (
                         <tr key={row.id} className="hover:bg-gray-100">
                           {row.getVisibleCells().map((cell, index) => (
                             <td
@@ -919,8 +985,6 @@ export default function BasePage() {
                                     onClick={() => {
                                       const confirmDelete = confirm("Are you sure you want to delete this row?");
                                       if (confirmDelete) {
-                                        console.log("Deleting row:", row);
-                                        console.log("row.id being sent to API:", row.id);
                                         handleDeleteRow(row.id);
                                         setContextRow(null);
                                       }
@@ -933,11 +997,9 @@ export default function BasePage() {
                             </td>
                           ))}
                         </tr>
-                      ))
-                    )}
+                      ))}
 
-                    {/* Add Row Button - only show when no filter is applied */}
-                    {(!filteredData || filteredData === null) && (
+                      {/* Add Row Button - only show when no filter is applied */}
                       <tr>
                         <td
                           colSpan={columns.length}
@@ -946,9 +1008,9 @@ export default function BasePage() {
                           <button onClick={handleAddRow}>+ Add row</button>
                         </td>
                       </tr>
-                    )}
-                  </tbody>
-
+                    </>
+                  )}
+                </tbody>
               </table>
             ) : (
               <p className="text-gray-500">No table selected.</p>
