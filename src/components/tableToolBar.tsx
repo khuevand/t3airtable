@@ -21,6 +21,7 @@ interface Props {
   columns: { id: string; name: string }[];
   data: any[] | null;
   onFilteredDataChange: (filteredData: any[] | null) => void;
+  onSortedDataChange?: (data: any[] | null) => void;
   tableId: string;
 }
 
@@ -38,6 +39,7 @@ export default function TableToolbar({
   columns,
   data,
   onFilteredDataChange,
+  onSortedDataChange,
   tableId,
 }: Props) {
   const [inputValue, setInputValue] = useState("");
@@ -53,6 +55,15 @@ export default function TableToolbar({
   const [selectedColumn, setSelectedColumn] = useState<string>("");
   const [selectedOperator, setSelectedOperator] = useState<string>("contains");
   const [filterValue, setFilterValue] = useState<string>("");
+  type SortRule = {
+    columnId: string;
+    direction: "asc" | "desc";
+  };
+
+  const [sortRules, setSortRules] = useState<SortRule[]>([
+    { columnId: "", direction: "asc" },
+  ]);
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
   
   const inputRef = useRef<HTMLInputElement>(null);
   const hideFieldsRef = useRef<HTMLDivElement>(null);
@@ -144,24 +155,6 @@ export default function TableToolbar({
     }
   };
 
-  // FIXED: Update filter function with proper typing
-  const updateFilter = (index: number, field: keyof FilterCondition, value: string) => {
-    setFilters(prevFilters => {
-      const newFilters = [...prevFilters];
-      // Ensure the index exists
-      if (index >= 0 && index < newFilters.length && newFilters[index]) {
-        // Create a new filter object with the updated field
-        const currentFilter = newFilters[index];
-        newFilters[index] = {
-          columnId: field === 'columnId' ? value : currentFilter.columnId,
-          operator: field === 'operator' ? value : currentFilter.operator,
-          value: field === 'value' ? value : currentFilter.value,
-        };
-      }
-      return newFilters;
-    });
-  };
-
   const removeFilter = (index: number) => {
     setFilters(prevFilters => {
       const newFilters = prevFilters.filter((_, i) => i !== index);
@@ -189,6 +182,22 @@ export default function TableToolbar({
   // FIXED: Get column name for display
   const getColumnName = (columnId: string) => {
     return columns.find(col => col.id === columnId)?.name || columnId;
+  };
+
+  const sortRecordsMutation = api.sort.getSortedRecords.useMutation({
+    onSuccess: (data) => {
+      onFilteredDataChange(data); // render sorted table
+    },
+  });
+
+  const applySort = () => {
+    const validSorts = sortRules.filter(rule => rule.columnId !== "");
+    if (validSorts.length === 0) return;
+
+    sortRecordsMutation.mutate({
+      tableId,
+      sortBy: validSorts,
+    });
   };
 
   useEffect(() => {
@@ -277,10 +286,102 @@ export default function TableToolbar({
             Filter {filters.length > 0 && `(${filters.length})`}
           </button>
 
-          <button className="flex items-center gap-1 hover:underline">
+          {/* Sort */}
+          <button
+            onClick={() => {
+              setShowFilterDropdown(false);
+              setShowHideFields(false);
+              setShowSearchBox(false);
+              setShowSortDropdown(prev => !prev);
+            }}
+            className={`flex items-center gap-1 hover:underline ${showSortDropdown ? 'text-blue-600' : ''}`}
+          >
             <ArrowUpDown className="w-4 h-4" />
-            Sort
+            Sort {sortRules.length > 0 && `(${sortRules.length})`}
           </button>
+
+          {/* Sort Dropdown Panel */}
+          {showSortDropdown && (
+            <div className="absolute right-0 top-full mt-1 z-50 w-80 bg-white border rounded shadow-md px-3 py-3 text-sm">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-medium text-gray-700">Sort Rows</span>
+                <button
+                  onClick={() => setShowSortDropdown(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Sort Rule List */}
+              {sortRules.map((rule, index) => (
+                <div key={index} className="flex gap-2 mb-2">
+                  {/* Column Selector */}
+                  <select
+                    value={rule.columnId}
+                    onChange={(e) => {
+                      const updated = [...sortRules];
+                      if (!updated[index]) return;
+                      updated[index].direction = e.target.value as "asc" | "desc";
+                      setSortRules(updated);
+                    }}
+                    className="flex-1 border px-2 py-1 rounded text-xs"
+                  >
+                    <option value="">Select column</option>
+                    {columns.map((col) => (
+                      <option key={col.id} value={col.id}>{col.name}</option>
+                    ))}
+                  </select>
+
+                  {/* Direction Selector */}
+                  <select
+                    value={rule.direction}
+                   onChange={(e) => {
+                    const updated = [...sortRules];
+                    if (!updated[index]) return;
+                    updated[index].direction = e.target.value as "asc" | "desc";
+                    setSortRules(updated);
+                  }}
+                    className="w-24 border px-2 py-1 rounded text-xs"
+                  >
+                    <option value="asc">A → Z / 1 → 9</option>
+                    <option value="desc">Z → A / 9 → 1</option>
+                  </select>
+
+                  {/* Remove sort rule */}
+                  {index > 0 && (
+                    <button
+                      onClick={() =>
+                        setSortRules(prev => prev.filter((_, i) => i !== index))
+                      }
+                      className="text-xs text-red-500"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              {/* Add another sort */}
+              <button
+                onClick={() =>
+                  setSortRules(prev => [...prev, { columnId: "", direction: "asc" }])
+                }
+                className="text-blue-600 text-xs mt-1"
+              >
+                + Add another sort
+              </button>
+
+              {/* Apply Sort */}
+              <button
+                onClick={applySort}
+                className="mt-3 bg-blue-600 text-white text-xs px-3 py-1 rounded w-full"
+                disabled={sortRules.length === 0 || sortRules.some(rule => !rule.columnId)}
+              >
+                Apply Sort
+              </button>
+            </div>
+          )}
 
           {/* Search */}
           <div className="relative" ref={searchRef}>
