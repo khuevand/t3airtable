@@ -73,7 +73,7 @@ export const columnRouter = createTRPCRouter({
         where: { id: input.columnId },
         data: { name: input.newName },
       });
-      return { success: true };
+      return { success: true, columnId: input.columnId, newName: input.newName };
     }),
   
   getColumns: privateProcedure

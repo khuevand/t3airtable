@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createTRPCRouter, privateProcedure } from "~/server/api/trpc";
+import { faker } from "@faker-js/faker";
 
 export const rowRouter = createTRPCRouter({
     addRow: privateProcedure
@@ -42,6 +43,40 @@ export const rowRouter = createTRPCRouter({
         where: { id: input.rowId },
         });
 
-        return { success: true };
+        return { success: true, rowId: input.rowId  };
     }),
+
+    
+    createManyRows: privateProcedure
+    .input(z.object({ tableId: z.string(), count: z.number().default(15000) }))
+    .mutation(async ({ ctx, input }) => {
+    const columns = await ctx.db.column.findMany({
+      where: { tableId: input.tableId },
+    });
+
+    if (!columns.length) throw new Error("No columns found");
+
+    const newRows = Array.from({ length: input.count }).map(() => ({
+      tableId: input.tableId,
+      cells: columns.map((col) => ({
+        columnId: col.id,
+        value: faker.word.words(2),
+      })),
+    }));
+
+    for (const row of newRows) {
+      const createdRow = await ctx.db.row.create({
+        data: {
+          tableId: row.tableId,
+          cells: {
+            createMany: {
+              data: row.cells,
+            },
+          },
+        },
+      });
+    }
+
+    return { success: true };
+  }),
 });
