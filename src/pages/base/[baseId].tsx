@@ -15,35 +15,45 @@ import { rename } from "fs";
 import { toast } from "react-toastify";
 import { useDebounce } from "use-debounce";
 import TableToolbar from "~/components/tableToolBar";
-import { highlightSearchTerm } from "~/components/highlightSearchTerm"
+import { highlightSearchTerm } from "~/components/highlightSearchTerm";
 
-// Define the structure of Column, Row, Table, and Table data
-// that will be used in the application
+// ========================================================================================
+// TYPE DEFINITIONS
+// ========================================================================================
+
 interface Column {
   id: string;
   name: string;
   type: string;
   order: number;
-  visible: boolean; // Add this line
+  visible: boolean;
 }
+
 interface Row {
   id: string;
-  cells: {
-    columnId: string;
-    value: string | number | null;
-  }[];
+  cells: Cell[];
 }
+
 interface Table {
   id: string;
   name: string;
 }
+
 interface TableData {
   name: string;
   columns: Column[];
   rows: Row[];
 }
 
+interface Cell {
+  id: string;
+  rowId: string;
+  columnId: string;
+  value: string | null;
+}
+
 type RowData = Record<string, any>;
+type SortDirection = "asc" | "desc";
 
 interface EditableCellProps {
   initialValue: string;
@@ -53,42 +63,69 @@ interface EditableCellProps {
   searchTerm?: string;
 }
 
-const EditableCell: React.FC<EditableCellProps & { searchTerm?: string }> = ({
+type SortRule = {
+  columnId: string;
+  direction: "asc" | "desc";
+};
+
+// ========================================================================================
+// EDITABLE CELL COMPONENT
+// ========================================================================================
+
+const EditableCell: React.FC<EditableCellProps> = ({
   initialValue,
   tableId,
   rowId,
   columnId,
   searchTerm = '',
 }) => {
+  // State
   const [value, setValue] = useState(initialValue);
   const [isEditing, setIsEditing] = useState(false);
+  
+  // Refs
+  const inputRef = useRef<HTMLInputElement>(null);
+  
+  // API
   const utils = api.useUtils();
   const updateCell = api.cell.updateCell.useMutation();
 
- useEffect(() => {
-  if (!isEditing) {
-    setValue(initialValue);
+  // Effects
+  useEffect(() => {
+    if (!isEditing) {
+      setValue(initialValue);
     }
   }, [initialValue, isEditing]);
 
-  const handleBlur = () => {
-    setIsEditing(false);
-    if (value !== initialValue) {
-      updateCell.mutate(
-        { rowId, columnId, value },
-        {
-          onSuccess: () => {
-            // Invalidate the query to refresh the data
-            utils.table.getTableById.invalidate({ tableId });
-          },
-          onError: (error) => {
-            // If update fails, revert to the original value
-            console.error('Failed to update cell:', error);
-            setValue(initialValue);
-          }
-        }
-      );
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
     }
+  }, [isEditing]);
+
+  // Event handlers
+  const handleBlur = () => {
+    setTimeout(() => {
+      if (isEditing) {
+        setIsEditing(false);
+        if (value !== initialValue) {
+          updateCell.mutate(
+            { rowId, columnId, value },
+            {
+              onSuccess: () => {
+                utils.table.getTableById.invalidate({ tableId });
+              },
+              onError: (error) => {
+                console.error('Failed to update cell:', error);
+                setValue(initialValue);
+                setIsEditing(true);
+              }
+            }
+          );
+        }
+      }
+    }, 100);
   };
 
   const handleFocus = () => {
@@ -100,15 +137,20 @@ const EditableCell: React.FC<EditableCellProps & { searchTerm?: string }> = ({
       handleBlur();
     }
     if (e.key === 'Escape') {
-      setValue(initialValue); // Reset to original value
+      setValue(initialValue);
       setIsEditing(false);
     }
   };
 
-  // Show highlighted text when not editing, regular input when editing
+  const handleDoubleClick = () => {
+    setIsEditing(true);
+  };
+
+  // Render
   if (isEditing) {
     return (
       <input
+        ref={inputRef}
         className="w-full border-none bg-transparent focus:outline-none"
         value={value}
         onChange={(e) => setValue(e.target.value)}
@@ -119,76 +161,162 @@ const EditableCell: React.FC<EditableCellProps & { searchTerm?: string }> = ({
     );
   }
 
-  // When not editing, show highlighted text
-  const highlightedText = highlightSearchTerm(value, searchTerm);
+  const highlightedText = highlightSearchTerm(value || '', searchTerm);
   
   return (
     <div
-      className="w-full cursor-text min-h-[20px]"
-      onClick={handleFocus}
-      dangerouslySetInnerHTML={{ __html: highlightedText }}
-    />
+      className="w-full cursor-text min-h-[20px] px-1 py-0.5 rounded hover:bg-gray-50"
+      onDoubleClick={handleDoubleClick}
+      title="Double-click to edit"
+    >
+      <div dangerouslySetInnerHTML={{ __html: highlightedText }} />
+    </div>
   );
 };
 
-export default function BasePage() {
-  const router = useRouter();
+// ========================================================================================
+// MAIN COMPONENT
+// ========================================================================================
 
+export default function BasePage() {
+  // ========================================================================================
+  // HOOKS & REFS
+  // ========================================================================================
+  
+  const router = useRouter();
   const params = useParams();
   const baseId = params?.baseId as string;
+  
+  // Refs
+  const tableRef = useRef<HTMLDivElement>(null);
+  const isColumnOperationRef = useRef(false);
+  
+  // API utils
+  const utils = api.useUtils();
 
-
-  ////////////////////// NEW TRPC PART ///////////////////////
-
+  // ========================================================================================
+  // STATE MANAGEMENT
+  // ========================================================================================
+  
+  // Table state
   const [activeTableId, setActiveTableId] = useState<string | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  
+  // Selection state
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [selectedColIndex, setSelectedColIndex] = useState<number | null>(null);
   const [allSelected, setAllSelected] = useState(false);
   const [activeCell, setActiveCell] = useState<{ row: number; col: number } | null>(null);
-
+  
+  // Column operations state
   const [isAddingColumn, setIsAddingColumn] = useState(false);
   const [newColumnName, setNewColumnName] = useState("New Column");
   const [newColumnType, setNewColumnType] = useState("text");
   const [editColumnName, setEditColumnName] = useState("");
   const [contextRow, setContextRow] = useState<string | null>(null);
-
-  // boolean value for search function
-  const [searchTerm, setSearchTerm] = useState("");
-  const [debouncedSearchTerm] = useDebounce(searchTerm, 200);
-
-  // boolean value for hide/ show
-  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
-
-  // boolean value for filter
-  const [filteredData, setFilteredData] = useState<any[] | null>(null);
-  const isColumnOperationRef = useRef(false);
-
   const [columnContextMenu, setColumnContextMenu] = useState<{
     columnId: string;
     columnName: string;
     index: number;
   } | null>(null);
+  
+  // Search state
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm] = useDebounce(searchTerm, 200);
+  
+  // Visibility state
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
+  
+  // Filter & sort state
+  const [filteredData, setFilteredData] = useState<any[] | null>(null);
+  const [sortRules, setSortRules] = useState<SortRule[]>([]);
+  const [sortedData, setSortedData] = useState<any[] | null>(null);
 
-
-  // Fetch base info
+  // ========================================================================================
+  // API QUERIES
+  // ========================================================================================
+  
   const { data: baseData, isLoading: isBaseLoading, error: baseError } =
     api.base.getBase.useQuery({ baseId });
 
-  // Once baseData is fetched, set activeTableId
+  const { data: tableData, isLoading: isTableLoading } = 
+    api.table.getTableById.useQuery({ 
+      baseId: baseId!, 
+      tableId: activeTableId! 
+    }, {
+      enabled: !!(baseId && activeTableId)
+    });
+
+  // ========================================================================================
+  // API MUTATIONS
+  // ========================================================================================
+  
+  const addTable = api.table.addTable.useMutation({
+    onError: (e) => console.error("Add table error:", e),
+    onSuccess: () => void utils.table.getTableById.invalidate()
+  });
+
+  const updateColumnVisibility = api.table.updateColumnVisibility.useMutation({
+    onError: (e) => console.error("Update column visibility error:", e),
+    onSuccess: () => void utils.table.getTableById.invalidate()
+  });
+
+  const removeTable = api.table.deleteTable.useMutation({
+    onError: (e) => console.error("Delete table error:", e),
+    onSuccess: () => void utils.table.getTableById.invalidate()
+  });
+
+  const createColumn = api.column.addColumn.useMutation({
+    onError: (e) => console.error("Add column error:", e),
+    onSuccess: () => void utils.table.getTableById.invalidate()
+  });
+
+  const removeColumn = api.column.deleteColumn.useMutation({
+    onError: (e) => console.error("Delete column error:", e),
+    onSuccess: () => void utils.table.getTableById.invalidate()
+  });
+
+  const createRow = api.row.addRow.useMutation({
+    onError: (e) => console.error("Add row error:", e),
+    onSuccess: () => void utils.table.getTableById.invalidate()
+  });
+
+  const deleteRow = api.row.deleteRow.useMutation({
+    onError: (e) => console.error("Delete row error:", e),
+    onSuccess: () => void utils.table.getTableById.invalidate()
+  });
+
+  const renameColumn = api.column.renameColumn.useMutation({
+    onError: (e) => console.error("Rename column error:", e),
+    onSuccess: () => void utils.table.getTableById.invalidate()
+  });
+
+  const sortRecordsMutation = api.sort.getSortedRecords.useMutation({
+    onSuccess: (data) => {
+      console.log("Sorted rows returned:", data);
+      setSortedData(data);
+    },
+    onError: (err) => {
+      console.error("Sort error:", err);
+      setSortedData(null);
+    },
+  });
+
+  // ========================================================================================
+  // EFFECTS
+  // ========================================================================================
+  
+  // Set initial active table when base data loads
   useEffect(() => {
-    if ( baseData && baseData.tables[0]) {
+    if (baseData && baseData.tables[0]) {
       setActiveTableId(baseData.tables[0].id);
     }
   }, [baseData]);
 
-  // Fetch table data only when both baseId and activeTableId are available
-  const { data: tableData, isLoading: isTableLoading } = api.table.getTableById.useQuery({ baseId: baseId!, tableId: activeTableId! });
-
+  // Initialize column visibility when table data loads
   useEffect(() => {
     if (!tableData) return;
 
-    // Initialize column visibility based on the fetched 'visible' field
     const visibilityState = tableData.columns.reduce((acc, col) => {
       acc[col.id] = col.visible;
       return acc;
@@ -197,106 +325,24 @@ export default function BasePage() {
     setColumnVisibility(visibilityState);
   }, [tableData]);
 
+  // Reset filtered data when table data loads
   useEffect(() => {
     if (tableData) {
-      // Reset filtered data when table data loads
-      setFilteredData(null); // null means no filter applied
+      setFilteredData(null);
     }
   }, [tableData]);
 
-  const addTable = api.table.addTable.useMutation({
-    onError: (e) => {
-      console.error("Delete row error occurred:", e);
-    },
-    onSuccess: () => {
-      void utils.table.getTableById.invalidate();
-    }
-  });
+  // Reset sorted data when active table changes
+  useEffect(() => {
+    setSortedData(null);
+  }, [activeTableId]);
 
-  const updateColumnVisibility = api.table.updateColumnVisibility.useMutation({
-    onError: (e) => {
-      console.error("Delete row error occurred:", e);
-    },
-    onSuccess: () => {
-      void utils.table.getTableById.invalidate();
-    }
-  });
-
-  const removeTable = api.table.deleteTable.useMutation({
-    onError: (e) => {
-      console.error("Delete row error occurred:", e);
-    },
-    onSuccess: () => {
-      void utils.table.getTableById.invalidate();
-    }
-  });
-  const createColumn = api.column.addColumn.useMutation({
-    onError: (e) => {
-      console.error("Delete row error occurred:", e);
-    },
-    onSuccess: () => {
-      void utils.table.getTableById.invalidate();
-    }
-  });
-  const removeColumn = api.column.deleteColumn.useMutation({
-    onError: (e) => {
-      console.error("Delete row error occurred:", e);
-    },
-    onSuccess: () => {
-      void utils.table.getTableById.invalidate();
-    }
-  });
-  const createRow = api.row.addRow.useMutation({
-    onError: (e) => {
-      console.error("Delete row error occurred:", e);
-    },
-    onSuccess: () => {
-      void utils.table.getTableById.invalidate();
-    }
-  });
-
-  const deleteRow = api.row.deleteRow.useMutation({
-    onError: (e) => {
-      console.error("Delete row error occurred:", e);
-    },
-    onSuccess: () => {
-      void utils.table.getTableById.invalidate();
-    }
-  });
-
-  const renameColumn = api.column.renameColumn.useMutation({
-    onError: (e) => {
-      console.error("Delete row error occurred:", e);
-    },
-    onSuccess: () => {
-      void utils.table.getTableById.invalidate();
-    }
-  });
-
-  const tableRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  inputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
-
-  const utils = api.useUtils(); // for refetch if needed
-
-  const updateCell = api.cell.updateCell.useMutation({
-    onSuccess: () => {
-      utils.table.getTableById.invalidate(); // if you want to refresh table
-    },
-  });
-
-  const handleSearchChange = (val: string) => {
-    setSearchTerm(val);
-    toast.dismiss();
-  };
-
-    // Modify the click outside handler
+  // Click outside handler
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (tableRef.current && !tableRef.current.contains(e.target as Node)) {
         setSelectedRows(new Set());
         setAllSelected(false);
-        // Only reset column selection if we're not in a column operation
         if (!isColumnOperationRef.current) {
           setSelectedColIndex(null);
           setColumnContextMenu(null);
@@ -305,8 +351,9 @@ export default function BasePage() {
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [])
+  }, []);
 
+  // Focus active cell
   useEffect(() => {
     const input = document.querySelector(
       `[data-row="${activeCell?.row}"][data-col="${activeCell?.col}"]`
@@ -314,7 +361,15 @@ export default function BasePage() {
     input?.focus();
   }, [activeCell]);
 
-  // wait for the creation of previous table to avoid duplication/ out of order name
+  // ========================================================================================
+  // EVENT HANDLERS
+  // ========================================================================================
+  
+  const handleSearchChange = (val: string) => {
+    setSearchTerm(val);
+    toast.dismiss();
+  };
+
   const handleAddTable = async () => {
     if (!baseId) return;
     addTable.mutate({ baseId: baseId });
@@ -325,15 +380,10 @@ export default function BasePage() {
 
     try {
       await removeTable.mutateAsync({ tableId: tableIdToDelete });
-
-      // Invalidate and refetch base data
       await utils.base.getBase.invalidate({ baseId });
-
-      // Refetch the updated list of tables
       const updatedBase = await utils.base.getBase.fetch({ baseId });
 
       if (updatedBase?.tables.length > 0) {
-        // Prefer next table, fallback to first one
         const fallbackTable =
           updatedBase.tables.find((t) => t.id !== tableIdToDelete) ??
           updatedBase.tables[0];
@@ -341,10 +391,9 @@ export default function BasePage() {
         if (fallbackTable) {
           setActiveTableId(fallbackTable.id);
         } else {
-          setActiveTableId(null); // No tables left
+          setActiveTableId(null);
         }
       } else {
-        // No tables left
         setActiveTableId(null);
       }
     } catch (err) {
@@ -352,28 +401,13 @@ export default function BasePage() {
     }
   };
 
-  const handleColumnHeaderClick = (columnId: string, columnName: string, index: number, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    isColumnOperationRef.current = true;
-    setSelectedColIndex(index);
-    setColumnContextMenu({
-      columnId,
-      columnName,
-      index
-    });
-    setEditColumnName(columnName);
-
-    // Reset the ref after a short delay
-    setTimeout(() => {
-      isColumnOperationRef.current = false;
-    }, 100);
-  };
-
   const handleAddColumn = () => {
     if (!baseId || !activeTableId) return;
-    createColumn.mutate({ tableId: activeTableId, name: newColumnName, type: newColumnType});
+    createColumn.mutate({ 
+      tableId: activeTableId, 
+      name: newColumnName, 
+      type: newColumnType 
+    });
   };
 
   const handleDeleteColumn = async (columnId: string) => {
@@ -392,18 +426,16 @@ export default function BasePage() {
     }
   };
 
-  // function to add new row to the table
   const handleAddRow = () => {
     if (!baseId || !activeTableId) return;
-    createRow.mutate({tableId: activeTableId});
+    createRow.mutate({ tableId: activeTableId });
   };
 
   const handleDeleteRow = async (rowId: string) => {
     if (!baseId || !activeTableId) return;
-    deleteRow.mutate({ rowId: rowId});
+    deleteRow.mutate({ rowId: rowId });
   };
 
-  // Modify column operations to not reset selection immediately
   const handleRenameColumn = async (columnId: string, newName: string) => {
     if (!baseId || !activeTableId) return;
     
@@ -411,7 +443,6 @@ export default function BasePage() {
     
     try {
       await renameColumn.mutateAsync({ columnId: columnId, newName: newName });
-      // Don't reset selection immediately, let the user close it manually
     } finally {
       setTimeout(() => {
         isColumnOperationRef.current = false;
@@ -419,13 +450,46 @@ export default function BasePage() {
     }
   };
 
+  const handleApplySort = (rules: { columnId: string; direction: string }[]) => {
+    if (!tableData) return;
+    
+    const finalRules = rules.length === 0
+      ? [{ columnId: "createdAt", direction: "asc" as SortDirection }]
+      : rules.map((r) => ({
+          columnId: r.columnId,
+          direction: (r.direction === "desc" ? "desc" : "asc") as SortDirection,
+        }));
 
-  // Update your columns definition
+    sortRecordsMutation.mutate({
+      tableId: tableData.id,
+      sortBy: finalRules,
+    });
+  };
+
+  const handleToggleColumnVisibility = async (columnId: string) => {
+    const newVisibility = !columnVisibility[columnId];
+    setColumnVisibility((prev) => ({ ...prev, [columnId]: newVisibility }));
+
+    updateColumnVisibility.mutate({
+      columnId,
+      visible: newVisibility,
+    });
+  };
+
+  const handleFilteredDataChange = (data: RowData[] | null) => {
+    setFilteredData(data);
+  };
+
+  // ========================================================================================
+  // COMPUTED VALUES
+  // ========================================================================================
+  
+  // Table columns definition
   const columns: ColumnDef<RowData>[] = useMemo(() => {
     if (!tableData || !activeTableId) return [];
 
     return tableData.columns
-      .filter(col => columnVisibility[col.id] !== false) // Only show visible columns
+      .filter(col => columnVisibility[col.id] !== false)
       .map((col) => ({
         accessorKey: col.id,
         header: col.name,
@@ -441,27 +505,19 @@ export default function BasePage() {
       }));
   }, [tableData, activeTableId, debouncedSearchTerm, columnVisibility]);
 
-  // Flatten row data for TanStack
+  // Transformed rows for TanStack
   const transformedRows = useMemo(() => {
-    if (!tableData) return [];
-    return tableData.rows.map((row) => {
+    const sourceRows = sortedData ?? tableData?.rows ?? [];
+    return sourceRows.map((row: any) => {
       const values: Record<string, any> = { id: row.id };
-      (row.cells ?? []).forEach((cell) => {
+      for (const cell of row.cells ?? []) {
         values[cell.columnId] = cell.value ?? "";
-      });
+      }
       return values;
     });
-  }, [tableData]);
+  }, [sortedData, tableData]);
 
-  // Init table with transformed rows
-  const table = useReactTable({
-    data: transformedRows,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    getRowId: (row) => row.id, // retrieve row unique id for deletion
-  });
-
-  // 1. First, add search results calculation
+  // Search results calculation
   const searchResults = useMemo(() => {
     if (!debouncedSearchTerm.trim() || !tableData) {
       return { totalMatches: 0 };
@@ -490,24 +546,18 @@ export default function BasePage() {
     return { totalMatches };
   }, [debouncedSearchTerm, tableData]);
 
-  const handleToggleColumnVisibility = async (columnId: string) => {
-    const newVisibility = !columnVisibility[columnId];
-    setColumnVisibility((prev) => ({ ...prev, [columnId]: newVisibility }));
+  // Initialize TanStack table
+  const table = useReactTable({
+    data: transformedRows,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getRowId: (row) => row.id,
+  });
 
-    // Use the already defined mutation hook
-    updateColumnVisibility.mutate({
-      columnId,
-      visible: newVisibility,
-    });
-  };
-
+  // ========================================================================================
+  // LOADING & ERROR STATES
+  // ========================================================================================
   
-
-  const handleFilteredDataChange = (data: any[] | null) => {
-    setFilteredData(data); // data will be null when no filter is applied
-  };
-
-      // Handle loading
   if (isBaseLoading) {
     return (
       <div className="h-screen flex items-center justify-center text-gray-500 text-sm">
@@ -516,7 +566,6 @@ export default function BasePage() {
     );
   }
 
-  // Handle error or missing base
   if (baseError || !baseData) {
     toast.error("Base not found or failed to load.", { toastId: "base-error" });
     return (
@@ -530,7 +579,10 @@ export default function BasePage() {
     toast.warn("No tables found in this base.", { toastId: "no-table" });
   }
 
-
+  // ========================================================================================
+  // RENDER
+  // ========================================================================================
+  
   return (
     <div className="h-screen flex">
       {/* OUTERMOST Sidebar - App Navigation */} 
@@ -658,9 +710,13 @@ export default function BasePage() {
           searchResult={searchResults}
           onToggleColumnVisibility={handleToggleColumnVisibility}
           columns={tableData?.columns || []}
+          columnVisibility={columnVisibility}
           tableId={tableData?.id || ""}
-          data={filteredData}  // Pass filteredData to the table
+          data={filteredData}
           onFilteredDataChange={handleFilteredDataChange}
+          sortRules={sortRules}
+          setSortRules={setSortRules}
+          onApplySort={handleApplySort}
         />
 
         {/* Main Content with Sidebar and Table */}
@@ -881,7 +937,7 @@ export default function BasePage() {
 
                                   {/* Cell content using EditableCell component */}
                                   <EditableCell
-                                    initialValue={String(rowData.cells?.find((cell: any) => cell.columnId === column.id)?.value || '')}
+                                    initialValue={String(rowData.cells?.find((cell: Cell) => cell.columnId === column.id)?.value || '')}
                                     tableId={activeTableId!}
                                     rowId={rowData.id}
                                     columnId={column.id}
@@ -891,7 +947,7 @@ export default function BasePage() {
                               ) : (
                                 // Non-first column - use EditableCell component
                                 <EditableCell
-                                  initialValue={String(rowData.cells?.find((cell: any) => cell.columnId === column.id)?.value || '')}
+                                  initialValue={String(rowData.cells?.find((cell: Cell) => cell.columnId === column.id)?.value || '')}
                                   tableId={activeTableId!}
                                   rowId={rowData.id}
                                   columnId={column.id}
@@ -1019,5 +1075,5 @@ export default function BasePage() {
         </div>
       </div>
     </div>
-  )
+  );
 }

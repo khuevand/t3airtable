@@ -14,14 +14,23 @@ import { useState, useEffect, useRef } from "react";
 import { useDebounce } from "use-debounce";
 import { api } from "~/utils/api";
 
+// set sorting rules for ascending/ descending
+type SortRule = {
+  columnId: string;
+  direction: "asc" | "desc";
+};
+
 interface Props {
   onSearchChange?: (value: string) => void;
   searchResult?: { totalMatches: number };
   onToggleColumnVisibility: (columnId: string) => void;
-  columns: { id: string; name: string }[];
+  columns: { id: string; name: string; visible: boolean }[]; // Add visible property
+  columnVisibility: Record<string, boolean>; // Add this prop
   data: any[] | null;
   onFilteredDataChange: (filteredData: any[] | null) => void;
-  onSortedDataChange?: (data: any[] | null) => void;
+  sortRules: SortRule[];
+  setSortRules: React.Dispatch<React.SetStateAction<SortRule[]>>;
+  onApplySort: (rules: SortRule[]) => void;
   tableId: string;
 }
 
@@ -37,9 +46,10 @@ export default function TableToolbar({
   searchResult,
   onToggleColumnVisibility,
   columns,
+  columnVisibility,
   data,
   onFilteredDataChange,
-  onSortedDataChange,
+  onApplySort,
   tableId,
 }: Props) {
   const [inputValue, setInputValue] = useState("");
@@ -49,26 +59,12 @@ export default function TableToolbar({
   const [selectedColumns, setSelectedColumns] = useState<Record<string, boolean>>({});
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   
-  // FIXED: Use proper type for filters
   const [filters, setFilters] = useState<FilterCondition[]>([]);
   const [logicalOperator, setLogicalOperator] = useState<'AND' | 'OR'>('AND');
   const [selectedColumn, setSelectedColumn] = useState<string>("");
   const [selectedOperator, setSelectedOperator] = useState<string>("contains");
   const [filterValue, setFilterValue] = useState<string>("");
-  type SortRule = {
-    columnId: string;
-    direction: "asc" | "desc";
-  };
-
-  const [sortRules, setSortRules] = useState<SortRule[]>([
-    { columnId: "", direction: "asc" },
-  ]);
-  const [showSortDropdown, setShowSortDropdown] = useState(false);
   
-  const inputRef = useRef<HTMLInputElement>(null);
-  const hideFieldsRef = useRef<HTMLDivElement>(null);
-  const searchRef = useRef<HTMLDivElement>(null);
-
   // FIXED: Use the enhanced filter mutation with logicalOperator support
   const filterRecordsMutation = api.filter.getFilteredRecords.useMutation({
     onSuccess: (data) => {
@@ -79,6 +75,16 @@ export default function TableToolbar({
       onFilteredDataChange(null); // Reset on error
     }
   });
+
+  const [sortRules, setSortRules] = useState<SortRule[]>([
+    { columnId: "", direction: "asc" },
+  ]);
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
+  
+  const inputRef = useRef<HTMLInputElement>(null);
+  const hideFieldsRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
+
 
   useEffect(() => {
     // Reset everything when table changes
@@ -99,12 +105,7 @@ export default function TableToolbar({
   };
 
   const handleToggleColumn = (columnId: string) => {
-    setSelectedColumns((prev) => {
-      const newSelectedColumns = { ...prev };
-      newSelectedColumns[columnId] = !newSelectedColumns[columnId];
-      onToggleColumnVisibility(columnId);
-      return newSelectedColumns;
-    });
+    onToggleColumnVisibility(columnId);
   };
 
   // Check if the selected operator requires a value
@@ -192,12 +193,7 @@ export default function TableToolbar({
 
   const applySort = () => {
     const validSorts = sortRules.filter(rule => rule.columnId !== "");
-    if (validSorts.length === 0) return;
-
-    sortRecordsMutation.mutate({
-      tableId,
-      sortBy: validSorts,
-    });
+    onApplySort(validSorts);
   };
 
   useEffect(() => {
@@ -256,23 +252,26 @@ export default function TableToolbar({
                     <X className="w-4 h-4" />
                   </button>
                 </div>
-                <div className="flex flex-col gap-2">
-                  {columns.map((column) => (
-                    <div key={column.id} className="flex items-center justify-between">
-                      <span>{column.name}</span>
-                      <button
-                        onClick={() => handleToggleColumn(column.id)}
-                        className={`p-2 rounded-full ${selectedColumns[column.id] ? 'bg-gray-300' : 'bg-green-400'}`}
-                      >
-                        {selectedColumns[column.id] ? (
-                          <ToggleLeft className="w-4 h-4 text-gray-700" />
-                        ) : (
-                          <ToggleRight className="w-4 h-4 text-gray-700" />
-                        )}
-                      </button>
-                    </div>
-                  ))}
-                </div>
+
+                  <div className="flex flex-col gap-2">
+                    {columns.map((column) => (
+                      <div key={column.id} className="flex items-center justify-between">
+                        <span>{column.name}</span>
+                        <button
+                          onClick={() => handleToggleColumn(column.id)}
+                          className={`p-2 rounded-full ${
+                            !columnVisibility[column.id] ? 'bg-gray-300' : 'bg-green-400'
+                          }`}
+                        >
+                          {!columnVisibility[column.id] ? (
+                            <ToggleLeft className="w-4 h-4 text-gray-700" />
+                          ) : (
+                            <ToggleRight className="w-4 h-4 text-gray-700" />
+                          )}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
               </div>
             )}
           </div>
@@ -322,7 +321,7 @@ export default function TableToolbar({
                     onChange={(e) => {
                       const updated = [...sortRules];
                       if (!updated[index]) return;
-                      updated[index].direction = e.target.value as "asc" | "desc";
+                      updated[index].columnId = e.target.value;
                       setSortRules(updated);
                     }}
                     className="flex-1 border px-2 py-1 rounded text-xs"
@@ -336,12 +335,12 @@ export default function TableToolbar({
                   {/* Direction Selector */}
                   <select
                     value={rule.direction}
-                   onChange={(e) => {
-                    const updated = [...sortRules];
-                    if (!updated[index]) return;
-                    updated[index].direction = e.target.value as "asc" | "desc";
-                    setSortRules(updated);
-                  }}
+                    onChange={(e) => {
+                      const updated = [...sortRules];
+                      if (!updated[index]) return;
+                      updated[index].direction = e.target.value as "asc" | "desc";
+                      setSortRules(updated);
+                    }}
                     className="w-24 border px-2 py-1 rounded text-xs"
                   >
                     <option value="asc">A → Z / 1 → 9</option>
@@ -380,6 +379,18 @@ export default function TableToolbar({
               >
                 Apply Sort
               </button>
+
+              {sortRules.length > 0 && (
+                <button
+                  onClick={() => {
+                    setSortRules([]);
+                    onApplySort([]);
+                  }}
+                  className="text-red-600 text-xs mt-2"
+                >
+                  Clear All Sorts
+                </button>
+              )}
             </div>
           )}
 

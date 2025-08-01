@@ -28,29 +28,30 @@ export const sortRouter = createTRPCRouter({
       });
 
       const sortedRows = [...rows].sort((a, b) => {
-        for (const sort of sortBy) {
-          const aRaw = a.cells.find(c => c.columnId === sort.columnId)?.value ?? "";
-          const bRaw = b.cells.find(c => c.columnId === sort.columnId)?.value ?? "";
+      for (const sort of sortBy) {
+        const aRaw = a.cells.find(c => c.columnId === sort.columnId)?.value ?? "";
+        const bRaw = b.cells.find(c => c.columnId === sort.columnId)?.value ?? "";
 
-          const aValue = typeof aRaw === "string" ? aRaw : String(aRaw);
-          const bValue = typeof bRaw === "string" ? bRaw : String(bRaw);
+        const aValue = typeof aRaw === "string" ? aRaw : String(aRaw);
+        const bValue = typeof bRaw === "string" ? bRaw : String(bRaw);
 
-          // Try numeric sort first
-          const aNum = parseFloat(aValue);
-          const bNum = parseFloat(bValue);
-          const isNumeric = !isNaN(aNum) && !isNaN(bNum);
+        // Try numeric sort first
+        const aNum = parseFloat(aValue);
+        const bNum = parseFloat(bValue);
+        const isNumeric = !isNaN(aNum) && !isNaN(bNum);
 
-          if (isNumeric) {
-            if (aNum < bNum) return sort.direction === "asc" ? -1 : 1;
-            if (aNum > bNum) return sort.direction === "asc" ? 1 : -1;
-          } else {
-            if (aValue < bValue) return sort.direction === "asc" ? -1 : 1;
-            if (aValue > bValue) return sort.direction === "asc" ? 1 : -1;
-          }
+        if (isNumeric) {
+          if (aNum < bNum) return sort.direction === "asc" ? -1 : 1;
+          if (aNum > bNum) return sort.direction === "asc" ? 1 : -1;
+        } else {
+          if (aValue < bValue) return sort.direction === "asc" ? -1 : 1;
+          if (aValue > bValue) return sort.direction === "asc" ? 1 : -1;
         }
-        return 0; // keep order if equal
-      });
+      }
+      return 0;
+    });
 
+      console.log("✅ Sorted order of row IDs:", sortedRows.map(r => r.id));
       return sortedRows;
     }),
 });
