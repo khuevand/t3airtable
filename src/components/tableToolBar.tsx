@@ -580,7 +580,7 @@ export default function TableToolbar({
             <Menu className="w-4 h-4 text-gray-600" />
           </button>
           <button className="flex items-center gap-2 px-2 py-1 hover:bg-gray-100 rounded">
-            <Grid3X3 className="w-4 h-4 text-blue-600" />
+            <Grid3X3 className="w-4 h-4 text-[#1778f7]" />
             <span>Grid view</span>
             <ChevronDown className="w-3 h-3 text-gray-500" />
           </button>
@@ -637,7 +637,7 @@ export default function TableToolbar({
           <button
             onClick={handleCreateRows}
             disabled={createRowsMutation.isPending || !isLoaded || !isSignedIn}
-            className="text-xs bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded disabled:bg-gray-400"
+            className="text-xs bg-[#1778f7] hover:bg-[#70aaf5] text-white px-3 py-1 rounded-xl disabled:bg-gray-400"
             title={!isSignedIn ? "Sign in required" : ""}
           >
             {createRowsMutation.isPending ? "Creating..." : "Add 15k Rows"}

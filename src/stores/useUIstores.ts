@@ -35,6 +35,9 @@ interface UIState {
   filteredData: any[] | null;
   sortRules: SortRule[];
   sortedData: any[] | null;
+  
+  hovered: boolean;
+  userProfile: boolean;
 
   // Setters
   set: (state: Partial<UIState>) => void;
@@ -58,6 +61,8 @@ export const useUIStore = create<UIState>((set) => ({
   filteredData: null,
   sortRules: [],
   sortedData: null,
+  hovered: false,
+  userProfile: false,
 
   // Unified setter
   set: (state) => set((prev) => ({ ...prev, ...state })),

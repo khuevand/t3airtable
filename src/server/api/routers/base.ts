@@ -130,4 +130,19 @@ export const baseRouter = createTRPCRouter({
 
       return { success: true, message: "Base deleted." };
     }),
+
+  getBaseName: privateProcedure
+  .input(z.object({ baseId: z.string() }))
+  .query(async ({ ctx, input }) => {
+    const base = await ctx.db.base.findUnique({
+      where: { id: input.baseId },
+      select: { name: true },
+    });
+
+    if (!base) {
+      throw new Error("Base not found");
+    }
+
+    return base.name;
+  }),
 });

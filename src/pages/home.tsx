@@ -1,25 +1,26 @@
-import {Bell, 
-        HelpCircle,
-        Plus,
-        Search,
-        AlignJustify,
-        Info,
-        CircleCheck,
-        House,
-        Star,
-        ExternalLink,
-        UsersRound,
-        BookOpen,
-        ShoppingBag,
-        Share,
-        ArrowUp,
-        Grid2X2,
-        Sparkles,
-        TableProperties,
-        Ellipsis,
-        Database,
-        Trash2
-      } from "lucide-react";
+import {
+  Bell, 
+  HelpCircle,
+  Plus,
+  Search,
+  AlignJustify,
+  Info,
+  CircleCheck,
+  House,
+  Star,
+  ExternalLink,
+  UsersRound,
+  BookOpen,
+  ShoppingBag,
+  Share,
+  ArrowUp,
+  Grid2X2,
+  Sparkles,
+  TableProperties,
+  Ellipsis,
+  Database,
+  Trash2,
+} from "lucide-react";
 import { useUser, SignOutButton } from "@clerk/nextjs";
 import { useRouter } from "next/router";
 import Image from "next/image";
@@ -30,6 +31,7 @@ import { toast } from "react-toastify";
 import { formatDistanceToNow } from "date-fns";
 import { api } from "~/utils/api";
 
+// ===== UTILITY FUNCTIONS =====
 function stringToColor(str: string): string {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -39,6 +41,7 @@ function stringToColor(str: string): string {
   return `hsl(${hue}, 70%, 50%)`;
 }
 
+// ===== TYPE DEFINITIONS =====
 type Base = {
   id: string;
   name: string;
@@ -46,16 +49,24 @@ type Base = {
   updatedAt: Date;
 };
 
+// ===== MAIN COMPONENT =====
 export default function HomeDashboard() {
   const { user } = useUser();
+  const router = useRouter();
+
+  // ===== STATE MANAGEMENT =====
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
-
-  const sidebarExpanded = isSidebarOpen || isHovered;
+  const [isCreating, setIsCreating] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const toggleMenu = () => setIsOpen(!isOpen);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
+  // Computed state
+  const sidebarExpanded = isSidebarOpen || isHovered;
+
+  // ===== CONSTANTS =====
   const dropdownOptions = [
     "Today",
     "Opened in past 7 days",
@@ -63,14 +74,9 @@ export default function HomeDashboard() {
     "Anytime",
   ];
 
-  const router = useRouter();
-  const [isCreating, setIsCreating] = useState(false);
-
+  // ===== API CALLS =====
   const { data: bases = [], refetch } = api.base.getAll.useQuery();
-
   const deleteBaseMutation = api.base.deleteBase.useMutation();
-
-    // tRPC mutation for creating a new base
   const createBaseMutation = api.base.createBase.useMutation({
     onSuccess: (data) => {
       router.push(`/base/${data.baseId}`);
@@ -82,13 +88,13 @@ export default function HomeDashboard() {
     },
   });
 
+  // ===== EVENT HANDLERS =====
+  const toggleMenu = () => setIsOpen(!isOpen);
+
   const handleBuildYourOwnClick = () => {
     setIsCreating(true);
     createBaseMutation.mutate();
   };
-
-  const [showMenu, setShowMenu] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
 
   const handleDelete = (base: Base) => {
     deleteBaseMutation.mutate(
@@ -104,9 +110,10 @@ export default function HomeDashboard() {
     );
   };
 
+  // ===== RENDER =====
   return (
     <div className="h-screen flex flex-col">
-      {/* Header Section */}
+      {/* ===== HEADER SECTION ===== */}
       <header className="flex items-center justify-center px-10 py-3 bg-[#f1f5ff] border-b border-slate-200">
         <div className="flex items-center gap-1">
           <Link
@@ -121,6 +128,7 @@ export default function HomeDashboard() {
         </div>
       </header>
 
+      {/* ===== NAVIGATION BAR ===== */}
       <section className="flex items-center justify-between px-4 py-2 border-b border-slate-200 w-full">
         {/* Left - Sidebar toggle and logo */}
         <div className="flex items-center mr-2 gap-3 min-w-[200px]">
@@ -216,9 +224,9 @@ export default function HomeDashboard() {
         </div>
       </section>
 
-      {/* Below the header: Sidebar + Main */}
+      {/* ===== MAIN LAYOUT: SIDEBAR + CONTENT ===== */}
       <div className="flex flex-1 overflow-hidden bg-[#f9fafb]">
-        {/* Sidebar */}
+        {/* ===== SIDEBAR ===== */}
         <aside
           className={`transition-all duration-300 ${
             sidebarExpanded ? "w-60" : "w-12"
@@ -226,7 +234,7 @@ export default function HomeDashboard() {
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          
+          {/* Top Navigation */}
           <div className="justify-between items-center flex flex-col gap-3 text-gray-700">
             <nav className="flex flex-col gap-6 w-full items-center mt-3 ml-2">
               <div className="flex items-center gap-4 text-sm cursor-pointer w-full">
@@ -252,6 +260,7 @@ export default function HomeDashboard() {
                 })}></div>
           </div>
 
+          {/* Bottom Navigation and Create Button */}
           <div className="mb-4">
             <div className="w-[95%] border-b border-gray-200 mt-1"></div>
             <nav className="flex flex-col gap-6 w-full items-center mt-3 ml-2">
@@ -305,9 +314,9 @@ export default function HomeDashboard() {
           </div>
         </aside>
 
-
-        {/* Main Content */}
+        {/* ===== MAIN CONTENT ===== */}
         <main className="flex-1 overflow-y-auto">
+          {/* Welcome Banner */}
           <section className="flex items-center justify-center py-2 bg-[#e6fce8]">
             <div className="flex items-center gap-1">
               <Link
@@ -327,6 +336,7 @@ export default function HomeDashboard() {
             </button>
           </section>
         
+          {/* Home Title and Quick Start Cards */}
           <div className="p-6">
             <div className="mb-6 ml-5 mt-2">
               <div className="text-[27px] font-bold text-gray-800 mb-1">Home</div>
@@ -360,18 +370,6 @@ export default function HomeDashboard() {
                   onClick: handleBuildYourOwnClick,
                 },
               ].map((card, index) => {
-                const content = (
-                  <div
-                    className="border border-gray-300 w-111 rounded-md px-5 py-4 text-sm text-left shadow-xs bg-white hover:shadow-md cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      {card.icon}
-                      <p className="font-semibold">{card.title}</p>
-                    </div>
-                    <p className={card.descColor || "text-gray-500"}>{card.desc}</p>
-                  </div>
-                );
-
                 return (     
                   <div
                   key={index}
@@ -400,7 +398,8 @@ export default function HomeDashboard() {
             </div>
           </div>
           
-          <section className="flex items-center justify-between px-6 pt-4 pb-2 mb-30">
+          {/* Filter Section */}
+          <section className="flex items-center justify-between px-6 pb-2">
             {/* Dropdown (Opened anytime) */}
             <div className="relative inline-block text-left">
               <button
@@ -450,117 +449,118 @@ export default function HomeDashboard() {
             </div>
           </section>
 
-           <section className="flex flex-col items-center justify-center min-h-[300px] text-sm text-gray-500">
-              {bases.length === 0 ? (
-                <>
-                  <p className="text-[21px] text-gray-900 mb-1">
-                    You haven't opened anything recently
-                  </p>
-                  <p className="mb-4 text-[13px]">Apps that you have recently opened will appear here.</p>
-                  <button className="px-2 py-1.5 border border-gray-300 rounded-lg shadow-sm text-sm text-gray-900 bg-white hover:bg-gray-100 transition">
-                    Go to all workspaces
-                  </button>
-                </>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full px-10">
-                  {bases.map((base) => {
-                    const initials = base.name.slice(0, 2).toUpperCase();
-                    const randomColor = stringToColor(base.id);
-                    return (
-                      <div className="relative group w-full max-w-sm">
+          {/* Bases Section */}
+          <section className="flex flex-col items-center justify-center min-h-[300px] text-sm text-gray-500">
+            {bases.length === 0 ? (
+              <>
+                <p className="text-[21px] text-gray-900 mb-1">
+                  You haven't opened anything recently
+                </p>
+                <p className="mb-4 text-[13px]">Apps that you have recently opened will appear here.</p>
+                <button className="px-2 py-1.5 border border-gray-300 rounded-lg shadow-sm text-sm text-gray-900 bg-white hover:bg-gray-100 transition">
+                  Go to all workspaces
+                </button>
+              </>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4 w-full px-10 mb-40">
+                {bases.map((base) => {
+                  return (
+                    <div key={base.id} className="relative group w-full max-w-sm">
+                      <div
+                        className="flex items-center justify-between border border-gray-300 rounded-lg bg-white shadow-sm p-5 hover:shadow-md cursor-pointer"
+                        onClick={() => router.push(`/base/${base.id}`)}
+                      >
+                        {/* Left: Initials */}
                         <div
-                          className="flex items-center justify-between border border-gray-300 rounded-lg bg-white shadow-sm p-4 hover:shadow-md cursor-pointer"
-                          onClick={() => router.push(`/base/${base.id}`)}
+                          className="w-14 h-14 rounded-lg flex items-center justify-center text-white text-lg font-bold mr-3"
+                          style={{ backgroundColor: stringToColor(base.id) }}
                         >
-                          {/* Left: Initials */}
-                          <div
-                            className="w-10 h-10 rounded-md flex items-center justify-center text-white text-lg font-bold mr-3"
-                            style={{ backgroundColor: stringToColor(base.id) }}
-                          >
-                            {base.name.slice(0, 2).toUpperCase()}
-                          </div>
+                          {base.name.slice(0, 2).toUpperCase()}
+                        </div>
 
-                          {/* Middle: Text */}
-                          <div className="flex flex-col flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">{base.name}</p>
-                            <div className="relative h-5">
-                              <p className="absolute inset-0 flex items-center gap-1 text-sm text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Database className="w-4 h-4" /> Open data
-                              </p>
-                              <p className="absolute inset-0 text-xs text-gray-400 group-hover:opacity-0 transition-opacity">
-                                Opened {formatDistanceToNow(new Date(base.updatedAt))} ago
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Right: Menu button */}
-                          <div className="relative z-20">
-                            <button
-                              className="p-1 rounded hover:bg-gray-100"
-                              onClick={(e) => {
-                                e.stopPropagation(); // prevent redirect
-                                setShowMenu((prev) => !prev);
-                              }}
-                            >
-                              <Ellipsis className="w-4 h-4" />
-                            </button>
-
-                            {/* Dropdown menu */}
-                            {showMenu && (
-                              <div className="absolute right-0 mt-2 w-28 bg-white border border-gray-200 rounded-md shadow-lg z-30">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation(); // prevent redirect
-                                    setShowConfirm(true);
-                                    setShowMenu(false);
-                                  }}
-                                  className="w-full flex items-center px-3 py-2 text-sm text-red-600 hover:bg-gray-50"
-                                >
-                                  <Trash2 className="w-4 h-4 mr-2" />
-                                  Delete
-                                </button>
-                              </div>
-                            )}
+                        {/* Middle: Text */}
+                        <div className="flex flex-col flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{base.name}</p>
+                          <div className="relative h-5">
+                            <p className="absolute inset-0 flex items-center gap-1 text-sm text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Database className="w-4 h-4" /> Open data
+                            </p>
+                            <p className="absolute inset-0 text-xs text-gray-400 group-hover:opacity-0 transition-opacity">
+                              Opened {formatDistanceToNow(new Date(base.updatedAt))} ago
+                            </p>
                           </div>
                         </div>
 
-                        {/* Confirmation modal */}
-                        {showConfirm && (
-                          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
-                            <div className="bg-white p-6 rounded shadow-lg z-50 w-[300px]">
-                              <h2 className="text-lg font-semibold mb-4">Confirm Delete</h2>
-                              <p className="mb-4">Are you sure you want to move this base to trash?</p>
-                              <div className="flex justify-end gap-2">
-                                <button
-                                  className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 text-sm"
-                                  onClick={() => setShowConfirm(false)}
-                                >
-                                  Cancel
-                                </button>
-                                <button
-                                  className="px-4 py-2 rounded bg-red-500 hover:bg-red-600 text-white text-sm"
-                                  onClick={() => handleDelete(base)}
-                                >
-                                  Delete
-                                </button>
-                              </div>
+                        {/* Right: Menu button */}
+                        <div className="relative z-20">
+                          <button
+                            className="p-1 rounded hover:bg-gray-100"
+                            onClick={(e) => {
+                              e.stopPropagation(); // prevent redirect
+                              setShowMenu((prev) => !prev);
+                            }}
+                          >
+                            <Ellipsis className="w-4 h-4" />
+                          </button>
+
+                          {/* Dropdown menu */}
+                          {showMenu && (
+                            <div className="absolute right-0 mt-2 w-28 bg-white border border-gray-200 rounded-md shadow-lg z-30">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation(); // prevent redirect
+                                  setShowConfirm(true);
+                                  setShowMenu(false);
+                                }}
+                                className="w-full flex items-center px-3 py-2 text-sm text-red-600 hover:bg-gray-50"
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Confirmation modal */}
+                      {showConfirm && (
+                        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
+                          <div className="bg-white p-6 rounded shadow-lg z-50 w-[300px]">
+                            <h2 className="text-lg font-semibold mb-4">Confirm Delete</h2>
+                            <p className="mb-4">Are you sure you want to move this base to trash?</p>
+                            <div className="flex justify-end gap-2">
+                              <button
+                                className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 text-sm"
+                                onClick={() => setShowConfirm(false)}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                className="px-4 py-2 rounded bg-red-500 hover:bg-red-600 text-white text-sm"
+                                onClick={() => handleDelete(base)}
+                              >
+                                Delete
+                              </button>
                             </div>
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-            {isCreating && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
-                <div className="flex items-center gap-2">
-                  <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-blue-500 border-opacity-75" />
-                  <span className="text-gray-700 text-sm">Creating base...</span>
-                </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
+          </section>
+
+          {/* Loading Overlay */}
+          {isCreating && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
+              <div className="flex items-center gap-2">
+                <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-blue-500 border-opacity-75" />
+                <span className="text-gray-700 text-sm">Creating base...</span>
+              </div>
+            </div>
+          )}
         </main>
       </div>
     </div>

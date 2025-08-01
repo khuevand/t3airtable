@@ -1,6 +1,6 @@
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState, useRef } from "react";
-import { useUser } from "@clerk/nextjs";
+import { SignOutButton, useUser } from "@clerk/nextjs";
 import {
   useReactTable,
   getCoreRowModel,
@@ -9,11 +9,20 @@ import {
 import { createTRPCRouter } from "~/server/api/trpc";
 import type { CellContext, ColumnDef } from "@tanstack/react-table";
 import { isCancelledError } from "@tanstack/react-query";
-import { ChevronDown, CheckSquare, Square, Search, Settings, Table, } from "lucide-react";
+import {ChevronDown,
+        CheckSquare,
+        Square,
+        Search,
+        Settings,
+        Table,
+        ArrowLeft,
+        Info,
+        Bell,
+        Plus,
+        History} from "lucide-react";
 import { api } from "~/utils/api";
 import { useParams } from "next/navigation";
-import { util } from "zod";
-import { rename } from "fs";
+import Image from "next/image";
 import { toast } from "react-toastify";
 import { useDebounce } from "use-debounce";
 import TableToolbar from "~/components/tableToolBar";
@@ -21,8 +30,9 @@ import { highlightSearchTerm } from "~/components/highlightSearchTerm";
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useUIStore } from "~/stores/useUIstores";
 
+
 // ========================================================================================
-// TYPE DEFINITIONS
+// TYPE DEFINITIONS AND COLOR PICK
 // ========================================================================================
 
 interface Column {
@@ -187,13 +197,13 @@ export default function BasePage() {
   // HOOKS & REFS
   // ========================================================================================
   
+  const { user } = useUser();
   const router = useRouter();
   const params = useParams();
   const baseId = params?.baseId as string;
   const { isLoaded, isSignedIn } = useUser();
 
   // Authentication
-
   if (!isLoaded) return null;
   if (!isSignedIn) {
     router.push("/");
@@ -211,6 +221,9 @@ export default function BasePage() {
   // STATE MANAGEMENT
   // ========================================================================================
   
+  // Side bar state
+  const hovered = useUIStore((state) => state.hovered);
+
   // Table state
   const activeTableId = useUIStore((state) => state.activeTableId);
   const openDropdownId = useUIStore((state) => state.openDropdownId);
@@ -237,11 +250,41 @@ export default function BasePage() {
   const sortRules = useUIStore((state) => state.sortRules);
   const sortedData = useUIStore((state) => state.sortedData);
 
+  // Access user account
+  const userProfile = useUIStore((state) => state.userProfile);
+
   const [searchTerm, setSearchTerm] = useState(""); // still local
   const [debouncedSearchTerm] = useDebounce(searchTerm, 200);
 
   // Setter (unified setter from the store)
   const set = useUIStore((state) => state.set);
+
+  // ========================================================================================
+  // Color Helper
+  // ========================================================================================
+  
+  function stringToColor(str: string, lightness: number): string {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const hue = hash % 360;
+    return `hsl(${hue}, 70%, ${lightness}%)`;
+  }
+
+  function isDarkColor(hsl?: string): boolean {
+    if (typeof hsl !== "string") return false;
+
+    const parts = hsl.split(",");
+    if (parts.length < 3) return false;
+
+    const lightnessStr = parts[2]?.replace("%", "").replace(")", "").trim();
+    const lightness = lightnessStr ? parseInt(lightnessStr, 10) : NaN;
+
+    return !isNaN(lightness) && lightness < 50;
+  }
+
+  const lighterColor = stringToColor(baseId, 90);
 
   // ========================================================================================
   // API QUERIES
@@ -257,6 +300,10 @@ export default function BasePage() {
     }, {
       enabled: !!(baseId && activeTableId)
     });
+
+  const { data: baseName, isLoading } = api.base.getBaseName.useQuery({
+    baseId: baseId!,
+  });
 
   // ========================================================================================
   // API MUTATIONS
@@ -548,6 +595,8 @@ export default function BasePage() {
     set({filteredData: data});
   };
 
+  const toggleUserMenu = () => set({userProfile: !userProfile});
+
   // ========================================================================================
   // COMPUTED VALUES
   // ========================================================================================
@@ -671,76 +720,155 @@ export default function BasePage() {
   
   return (
     <div className="h-screen flex">
-      {/* OUTERMOST Sidebar - App Navigation */} 
-      <div className="w-14 bg-white border-r flex flex-col justify-between items-center py-4">
-        {/* Top: Logo */}
-        <div className="w-7 h-7">
-          <svg viewBox="0 0 512 512" fill="black" width="100%" height="100%">
-            <path d="M256 0L512 192H0L256 0Z" />
-            <path d="M512 192L256 384L0 192H512Z" />
-          </svg>
-        </div>
-
-        {/* Middle: Placeholders */}
-        <div className="flex flex-col items-center gap-6 mt-8">
-          <div className="w-5 h-5 rounded-full border-2 border-gray-500 animate-spin" />
-          <div className="w-5 h-5 rounded-full bg-gray-300" title="Help" />
-          <div className="w-5 h-5 rounded-full bg-gray-300" title="Notifications" />
+      {/* OUTERMOST Sidebar - App Navigation */}
+      <div
+        className="w-14 bg-white border-r border-gray-200 flex flex-col justify-between items-center py-4"
+      >
+        <div
+          className="w-7 h-7 cursor-pointer"
+          onMouseEnter={() => set({hovered: true})}
+          onMouseLeave={() => set({hovered: false})}
+          onClick={() => router.push("/")}
+        >
+          {hovered ? (
+            <ArrowLeft className="w-5 h-5 text-gray-700" />
+          ) : (
+            <Image
+              src="/airtable.png"
+              alt="Logo"
+              width={90}
+              height={30}
+              className="w-6 h-6 object-contain"
+            />
+          )}
         </div>
 
         {/* Bottom: K Profile */}
-        <div className="w-8 h-8 bg-blue-600 text-white flex items-center justify-center rounded-full text-sm font-bold">
-          K
+        <div className="absolute bottom-4 left-4 flex flex-col items-center space-y-6 z-50">
+          {/* Top icons */}
+          <Info className="w-4 h-4 text-gray-600 hover:text-black cursor-pointer" />
+          <Bell className="w-4 h-4 text-gray-600 hover:text-black cursor-pointer" />
+
+          {/* Profile button */}
+          <button onClick={toggleUserMenu}>
+            {user?.imageUrl ? (
+              <Image
+                src={user.imageUrl}
+                alt="User"
+                className="rounded-full"
+                width={26}
+                height={26}
+              />
+            ) : (
+              <div className="w-8 h-8 bg-blue-600 text-white flex items-center justify-center rounded-full text-sm font-bold cursor-pointer">
+                {user?.firstName?.[0] ?? "U"}
+              </div>
+            )}
+          </button>
+
+          {/* Side dropdown menu */}
+          {userProfile && (
+            <div className="absolute left-12 bottom-0 w-64 bg-white shadow-xl border border-gray-200 rounded-md font-sans text-sm text-gray-800 z-50">
+              <div className="px-4 py-3 border-b">
+                <p className="font-semibold">{user?.fullName}</p>
+                <p className="text-xs text-gray-500">{user?.primaryEmailAddress?.emailAddress}</p>
+              </div>
+
+              <ul className="py-2">
+                <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer">Account</li>
+                <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex justify-between">
+                  <span>Manage groups</span>
+                  <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">Business</span>
+                </li>
+                <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer">Notification preferences</li>
+                <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer">Language preferences</li>
+                <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex justify-between">
+                  <span>Appearance</span>
+                  <span className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full">Beta</span>
+                </li>
+                <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer">Integrations</li>
+                <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer">Builder hub</li>
+                <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-red-500">Trash</li>
+              </ul>
+
+              <div className="border-t px-4 py-2">
+                <SignOutButton>
+                  <button className="w-full text-left hover:bg-gray-100 px-2 py-1 rounded-md text-red-600">
+                    Log out
+                  </button>
+                </SignOutButton>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col">
         {/* Header - spans full width of main content */}
-        <header className="flex items-center justify-between px-6 py-2 bg-white border-b border-gray-200">
-          {/* Left: Logo + Base */}
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-md bg-yellow-700 flex items-center justify-center">
-              <svg viewBox="0 0 512 512" fill="white" width="16" height="16">
-                <path d="M256 0L512 192H0L256 0Z" />
-                <path d="M512 192L256 384L0 192H512Z" />
-              </svg>
+      <header className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200">
+        {/* Left: Logo + Base name dropdown */}
+        <div className="flex items-center gap-2 min-w-[220px]">
+          <div
+            className="w-8 h-8 rounded-md flex items-center justify-center"
+            style={{ backgroundColor: stringToColor(baseId, 50) }}
+          >
+            <Image
+              src="/airtable.png"
+              alt="Logo"
+              width={28}
+              height={28}
+              className={`object-contain ${isDarkColor(stringToColor(baseId, 50)) ? "invert" : ""}`}
+            />
+          </div>
+
+          <div className="flex items-center gap-1">
+            <div className="text-[18px] font-semibold text-gray-800 whitespace-nowrap">
+              {isLoading ? "Loading..." : baseName || "Untitled Base"}
             </div>
-            <h1 className="text-sm font-semibold text-gray-800">
-              Untitled Base <span className="ml-1">▼</span>
-            </h1>
+            <ChevronDown className="w-4 h-4 text-gray-800" />
           </div>
+        </div>
 
-          {/* Middle: Navigation */}
-          <nav className="flex items-center space-x-6 text-sm text-gray-600">
-            <a href="#" className="font-medium text-black">Data</a>
-            <a href="#" className="hover:text-black">Automations</a>
-            <a href="#" className="hover:text-black">Interfaces</a>
-            <a href="#" className="hover:text-black">Forms</a>
-          </nav>
+        {/* Center: Navigation links */}
+        <nav className="flex items-center gap-6 text-sm text-gray-600">
+          <a
+            href="#"
+            className="relative font-medium text-black px-2"
+          >
+            <span className="relative z-10">Data</span>
+            <span
+              className="absolute top-9 left-1/2 -translate-x-1/2 w-7 h-[3px] rounded-sm"
+              style={{ backgroundColor: stringToColor(baseId ?? "", 50) }}
+            />
+          </a>
+          <a href="#" className="hover:text-black">Automations</a>
+          <a href="#" className="hover:text-black">Interfaces</a>
+          <a href="#" className="hover:text-black">Forms</a>
+        </nav>
 
-          {/* Right: Buttons */}
-          <div className="flex items-center gap-3 text-xs">
-            <button title="Undo">
-              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className="w-4 h-4 text-gray-500">
-                <path d="M9 5H3v6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M3 5c2-2 5-3 8-2s5.3 4.6 4 7.5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-            <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full">Trial: 7 days left</span>
-            <a href="#" className="text-blue-600 hover:underline">See what's new</a>
-            <button className="bg-yellow-700 text-white text-xs px-3 py-1 rounded-md font-medium hover:bg-yellow-800">
-              Share
-            </button>
-          </div>
-        </header>
+        {/* Right: Controls */}
+        <div className="flex items-center gap-3 text-xs whitespace-nowrap">
+          <History className="w-4 h-4 text-gray-700"/>
+          <span className="bg-[#f2f2f2] text-[13px] text-gray-800 px-3 py-2 rounded-full">
+            Trial: 7 days left
+          </span>
+          <button className="text-white text-xs px-3 py-1.5 shadow-sm rounded-md font-medium cursor-pointer"
+          style={{ backgroundColor: stringToColor(baseId, 50) }}>
+            Share
+          </button>
+        </div>
+      </header>
 
         {/* Table Tabs Section */}
-        <div className="flex items-center bg-[#fff9e8] border-b border-gray-200 px-4 py-2 text-sm relative">
+        <div
+          className="flex items-center border-gray-200 text-sm relative"
+          style={{ backgroundColor: lighterColor }}
+        >
           {baseData.tables.map((table) => (
-            <div key={table.id} className="relative mr-2">
+            <div key={table.id} className="relative border-r border-gray-200">
               <div
-                className={`flex items-center px-4 py-1 rounded-t-md border cursor-pointer ${
+                className={`flex items-center px-4 py-1 rounded-t-md border border-gray-200 cursor-pointer ${
                   table.id === activeTableId
                     ? "bg-white text-black border-b-white font-medium"
                     : "text-gray-500 hover:text-black border-transparent"
@@ -791,7 +919,7 @@ export default function BasePage() {
 
           <button
             onClick={handleAddTable}
-            className="flex items-center ml-2 px-2 py-1 text-[14px] text-gray-500 hover:text-gray-700"
+            className="flex items-center ml-2 px-2 py-1 text-[14px] text-gray-600 hover:text-gray-700 cursor-pointer"
           >
             + Add or Import
           </button>
@@ -814,16 +942,17 @@ export default function BasePage() {
         {/* Main Content with Sidebar and Table */}
         <div className="flex flex-1 overflow-hidden">
           {/* LEFT Sidebar with View Controls */}
-          <aside className="w-56 bg-white border-r border-gray-200 p-3 flex flex-col gap-2 text-sm">
-            <button className="text-left flex items-center gap-2 px-3 py-2 bg-gray-100 rounded">
-              ➕ Create new...
-            </button>
-            <div className="flex items-center gap-2 px-3">
-              <Search className="w-4 h-4"/>
-              <span className="text-gray-500">Find a view</span>
-              <Settings className="w-4 h-4"/>
+          <aside className="w-70 bg-white border-r border-gray-200 p-3 flex flex-col gap-3 text-sm text-[13px]">
+            <div className="px-3 py-2 rounded flex items-center gap-2 ">
+              <Plus className="w-4 h-4 text-gray-700"/>
+              <span className="text-gray-900">Create new...</span>
             </div>
-            <div className="px-3 py-2 bg-gray-100 rounded flex items-center gap-2 text-blue-600 font-medium">
+            <div className="flex items-center gap-2 px-3">
+              <Search className="w-4 h-4 text-gray-400"/>
+              <span className="text-gray-500">Find a view</span>
+              <Settings className="w-4 h-4 ml-28 text-gray-600"/>
+            </div>
+            <div className="px-3 py-2 bg-gray-100 rounded flex items-center gap-2 text-[#1778f7] font-medium">
               <Table className="w-4 h-4"/>
               <span className="text-gray-500">Grid View</span>
             </div>
@@ -850,11 +979,8 @@ export default function BasePage() {
                             <th
                               key={header.id}
                               onContextMenu={() => {
-                                // setSelectedColIndex(index);
                                 set({selectedColIndex: index});
-                                // setActiveCell({ row: 0, col: index });
                                 set({activeCell: { row: 0, col: index }});
-                                // setEditColumnName(header.column.columnDef.header as string);
                                 set({editColumnName: header.column.columnDef.header as string})
                               }}
                               className={`relative group border-b border-r border-gray-300 px-2 py-1 text-sm text-gray-800 text-left hover:bg-gray-100 ${
