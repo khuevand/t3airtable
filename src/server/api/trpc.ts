@@ -46,16 +46,15 @@
    *
    * @see https://trpc.io/docs/context
    */
-  export const createTRPCContext = async (opts: CreateNextContextOptions) => {
 
-    const {req} = opts;
-    const {userId} = getAuth(req);
+  export const createTRPCContext = async ({ req }: CreateNextContextOptions) => {
+    const { userId } = getAuth(req);
 
     const user = userId ? await (await clerkClient()).users.getUser(userId) : null; // ✅ fetch full user object
 
     return {
       db,
-      currentUser: user,
+      currentUser: user, // ✅ Now a full Clerk User object
     };
   };
 

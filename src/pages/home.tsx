@@ -59,7 +59,7 @@ type Base = {
 
 // ===== MAIN COMPONENT =====
 export default function HomeDashboard() {
-  const { user } = useUser();
+  const { user, isLoaded: isUserLoaded } = useUser();
   const router = useRouter();
 
   // ===== STATE MANAGEMENT =====
@@ -83,7 +83,14 @@ export default function HomeDashboard() {
   ];
 
   // ===== API CALLS =====
-  const { data: bases = [], refetch } = api.base.getAll.useQuery();
+  const {
+    data: bases = [],
+    refetch,
+    isFetching,
+    isLoading: isBasesLoading,
+  } = api.base.getAll.useQuery(undefined, {
+    enabled: isUserLoaded && !!user?.id,
+  });
   const deleteBaseMutation = api.base.deleteBase.useMutation();
   const createBaseMutation = api.base.createBase.useMutation({
     onSuccess: (data) => {
@@ -501,7 +508,12 @@ export default function HomeDashboard() {
 
           {/* Bases Section */}
           <section className="flex flex-col items-center justify-center min-h-[300px] text-sm text-gray-500">
-            {bases.length === 0 ? (
+            {!isUserLoaded || isBasesLoading ? (
+              <div className="flex items-center justify-center py-10">
+                <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-pink-500 border-opacity-75 mr-2" />
+                <span className="text-sm text-gray-600">Loading your bases...</span>
+              </div>
+            ) : bases.length === 0 ? (
               <>
                 <p className="text-[21px] text-gray-900 mb-1">
                   You haven't opened anything recently

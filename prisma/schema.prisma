@@ -11,53 +11,60 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+model User {
+  id        String   @id // This must match Clerk's user.id
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  bases     Base[]   @relation("UserBases")
+}
+
 model Base {
   id        String   @id @default(cuid())
   name      String
+  userId    String   // Make sure this exists
+  user      User     @relation("UserBases", fields: [userId], references: [id], onDelete: Cascade)
   tables    Table[]  @relation("BaseTables")
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId]) // Add index for better performance
 }
 
 model Table {
   id      String   @id @default(cuid())
   name    String
-  baseId  String // foreign key
-  base    Base     @relation("BaseTables", fields: [baseId], references: [id], onDelete: Cascade) // relation
+  baseId  String
+  base    Base     @relation("BaseTables", fields: [baseId], references: [id], onDelete: Cascade)
   columns Column[] @relation("TableColumns")
   rows    Row[]    @relation("TableRows")
 }
 
 model Column {
-  id      String @id @default(cuid())
+  id      String  @id @default(cuid())
   name    String
-  type    String // e.g., 'text', 'number', 'checkbox'
+  type    String  // e.g., 'text', 'number', 'checkbox'
   tableId String
-  table   Table  @relation("TableColumns", fields: [tableId], references: [id], onDelete: Cascade)
+  table   Table   @relation("TableColumns", fields: [tableId], references: [id], onDelete: Cascade)
   order   Int
-  cells   Cell[] @relation("ColumnCells")
-  visible   Boolean  @default(true)
+  visible Boolean @default(true)
+  cells   Cell[]  @relation("ColumnCells")
 }
 
 model Row {
   id      String @id @default(cuid())
   tableId String
-  table Table @relation("TableRows", fields: [tableId], references: [id], onDelete: Cascade)
+  table   Table  @relation("TableRows", fields: [tableId], references: [id], onDelete: Cascade)
   cells   Cell[] @relation("RowCells")
 }
 
 model Cell {
-  id       String @id @default(cuid())
+  id       String  @id @default(cuid())
   rowId    String
   columnId String
   value    String?
-  row    Row    @relation("RowCells", fields: [rowId], references: [id], onDelete: Cascade)
-  column Column @relation("ColumnCells", fields: [columnId], references: [id], onDelete: Cascade)
-}
+  row      Row     @relation("RowCells", fields: [rowId], references: [id], onDelete: Cascade)
+  column   Column  @relation("ColumnCells", fields: [columnId], references: [id], onDelete: Cascade)
 
-model User {
-  id        String   @id // This must match Clerk's user.id
-  email     String
-  name      String?
-  createdAt DateTime @default(now())
+  @@unique([rowId, columnId]) // Ensure one cell per row/column combination
 }

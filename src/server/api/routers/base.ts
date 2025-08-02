@@ -4,18 +4,41 @@ import { createTRPCRouter, privateProcedure } from "~/server/api/trpc";
 
 export const baseRouter = createTRPCRouter({
   // GET: all bases (under current account)
-  getAll: privateProcedure.query(async ({ ctx }) => {
-    return ctx.db.base.findMany({
-      orderBy: { createdAt: "desc" },
-    });
-  }),
+  getAll: privateProcedure
+    .query(async ({ ctx }) => {
+      const userId = ctx.currentUser?.id;
+      if (!userId) throw new Error("Unauthorized");
+
+      const bases = await ctx.db.base.findMany({
+        where: { userId: userId },
+        orderBy: { updatedAt: "desc" },
+      });
+
+      return bases;
+    }),
 
   // POST: Create new base + default table + columns + 3 empty rows
   createBase: privateProcedure.mutation(async ({ ctx }) => {
+    const user = ctx.currentUser;
+    if (!user) throw new Error("Unauthorized");
+
+    // Ensure user exists in your DB (upsert pattern)
+    await ctx.db.user.upsert({
+      where: { id: user.id },
+      update: {},
+      create: {
+        id: user.id,
+        email: user.emailAddresses[0]?.emailAddress || "",
+        name: user.firstName ?? "",
+      },
+    });
+
+    // Create base after ensuring user exists
     const base = await ctx.db.base.create({
       data: {
         id: uuidv4(),
         name: "Untitled Base",
+        userId: user.id,
       },
     });
 
@@ -45,7 +68,62 @@ export const baseRouter = createTRPCRouter({
           cells: {
             create: table.columns.map((column) => ({
               columnId: column.id,
-              value: "", // empty string initially
+              value: "",
+            })),
+          },
+        },
+      });
+    }
+
+    return {
+      baseId: base.id,
+      table: {
+        id: table.id,
+        name: table.name,
+      },
+    };
+  }),
+
+  // Alternative approach without uuidv4 (let Prisma generate the ID)
+  createBaseAlternative: privateProcedure.mutation(async ({ ctx }) => {
+    const userId = ctx.currentUser?.id;
+    if (!userId) throw new Error("Unauthorized");
+    
+    const base = await ctx.db.base.create({
+      data: {
+        name: "Untitled Base",
+        userId: userId,
+        // Remove the manual id generation, let Prisma handle it
+      },
+    });
+
+    const defaultColumns = [
+      { name: "Name", type: "text", order: 0 },
+      { name: "Notes", type: "text", order: 1 },
+      { name: "Assignee", type: "text", order: 2 },
+      { name: "Status", type: "text", order: 3 },
+      { name: "Attachments", type: "file", order: 4 },
+    ];
+
+    const table = await ctx.db.table.create({
+      data: {
+        name: "Table 1",
+        baseId: base.id,
+        columns: {
+          create: defaultColumns,
+        },
+      },
+      include: { columns: true },
+    });
+
+    for (let i = 0; i < 3; i++) {
+      await ctx.db.row.create({
+        data: {
+          tableId: table.id,
+          cells: {
+            create: table.columns.map((column) => ({
+              columnId: column.id,
+              value: "",
             })),
           },
         },
@@ -65,8 +143,14 @@ export const baseRouter = createTRPCRouter({
   getBase: privateProcedure
     .input(z.object({ baseId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const base = await ctx.db.base.findUnique({
-        where: { id: input.baseId },
+      const userId = ctx.currentUser?.id;
+      if (!userId) throw new Error("Unauthorized");
+
+      const base = await ctx.db.base.findFirst({
+        where: { 
+          id: input.baseId,
+          userId: userId
+        },
         select: {
           id: true,
           name: true,
@@ -116,12 +200,18 @@ export const baseRouter = createTRPCRouter({
   deleteBase: privateProcedure
     .input(z.object({ baseId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const base = await ctx.db.base.findUnique({
-        where: { id: input.baseId },
+      const userId = ctx.currentUser?.id;
+      if (!userId) throw new Error("Unauthorized");
+
+      const base = await ctx.db.base.findFirst({
+        where: { 
+          id: input.baseId,
+          userId: userId
+        },
       });
 
       if (!base) {
-        throw new Error("Base not found.");
+        throw new Error("Base not found or you don't have permission to delete it.");
       }
 
       await ctx.db.base.delete({
@@ -132,17 +222,23 @@ export const baseRouter = createTRPCRouter({
     }),
 
   getBaseName: privateProcedure
-  .input(z.object({ baseId: z.string() }))
-  .query(async ({ ctx, input }) => {
-    const base = await ctx.db.base.findUnique({
-      where: { id: input.baseId },
-      select: { name: true },
-    });
+    .input(z.object({ baseId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.currentUser?.id;
+      if (!userId) throw new Error("Unauthorized");
 
-    if (!base) {
-      throw new Error("Base not found");
-    }
+      const base = await ctx.db.base.findFirst({
+        where: { 
+          id: input.baseId,
+          userId: userId
+        },
+        select: { name: true },
+      });
 
-    return base.name;
-  }),
+      if (!base) {
+        throw new Error("Base not found");
+      }
+
+      return base.name;
+    }),
 });
