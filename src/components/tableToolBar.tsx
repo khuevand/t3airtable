@@ -15,6 +15,7 @@ import { useDebounce } from "use-debounce";
 import { useAuth } from "@clerk/nextjs"; 
 import { api } from "~/utils/api";
 import { toast } from "react-toastify";
+import { useUIStore } from "~/stores/useUIstores";
 
 // Types
 interface SortRule {
@@ -68,10 +69,16 @@ export default function TableToolbar({
   columnVisibility,
   data,
   onFilteredDataChange,
+  sortRules, // Use the prop instead of local state
+  setSortRules, // Use the prop instead of local state
   onApplySort,
   tableId,
 }: Props) {
   const { isSignedIn, isLoaded } = useAuth();
+
+  // Hide state
+  const visibilityMap = useUIStore((state) => state.columnVisibility);
+  const isAnyColumnHidden = Object.values(columnVisibility).some((visible) => !visible);
 
   // Search state
   const [inputValue, setInputValue] = useState("");
@@ -90,10 +97,10 @@ export default function TableToolbar({
   const [selectedOperator, setSelectedOperator] = useState("contains");
   const [filterValue, setFilterValue] = useState("");
   
-  // Sort state
-  const [sortRules, setSortRules] = useState<SortRule[]>([
-    { columnId: "", direction: "asc" },
-  ]);
+  // REMOVED: Local sort state - now using props
+  // const [sortRules, setSortRules] = useState<SortRule[]>([
+  //   { columnId: "", direction: "asc" },
+  // ]);
   
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
@@ -245,11 +252,11 @@ export default function TableToolbar({
   };
 
   const handleAddSortRule = () => {
-    setSortRules(prev => [...prev, { columnId: "", direction: "asc" }]);
+    setSortRules([...sortRules, { columnId: "", direction: "asc" }]);
   };
 
   const handleRemoveSortRule = (index: number) => {
-    setSortRules(prev => prev.filter((_, i) => i !== index));
+    setSortRules(sortRules.filter((_, i) => i !== index));
   };
 
   const handleClearAllSorts = () => {
@@ -277,14 +284,19 @@ export default function TableToolbar({
   };
 
   const handleUpdateSortRule = (index: number, field: keyof SortRule, value: any) => {
-    setSortRules(prev => {
-      const updated = [...prev];
-      if (updated[index]) {
-        updated[index] = { ...updated[index], [field]: value };
-      }
-      return updated;
-    });
+    const updated = [...sortRules];
+    if (updated[index]) {
+      updated[index] = { ...updated[index], [field]: value };
+    }
+    setSortRules(updated);
   };
+
+  // Initialize sortRules if empty when component mounts
+  useEffect(() => {
+    if (sortRules.length === 0) {
+      setSortRules([{ columnId: "", direction: "asc" }]);
+    }
+  }, []);
 
   // Render functions
   const renderFilterConditions = () => {
@@ -597,7 +609,9 @@ export default function TableToolbar({
                 setShowFilterDropdown(false);
                 setShowSortDropdown(false);
               }}
-              className="flex items-center gap-1 hover:underline"
+              className={`flex items-center gap-1 px-2 py-1 rounded-md ${
+                isAnyColumnHidden ? "bg-blue-100 text-blue-700" : "hover:bg-gray-100"
+              }`}
             >
               <EyeOff className="w-4 h-4" />
               Hide fields
@@ -613,7 +627,13 @@ export default function TableToolbar({
               setShowSearchBox(false);
               setShowSortDropdown(false);
             }}
-            className={`flex items-center gap-1 hover:underline ${showFilterDropdown ? 'text-blue-600' : ''}`}
+            className={`flex items-center gap-1 px-2 py-1 rounded-md ${
+              filters.length > 0
+                ? "bg-green-100 text-green-700"
+                : showFilterDropdown
+                ? "text-gray-600"
+                : "hover:bg-gray-100"
+            }`}
           >
             <ListFilter className="w-4 h-4" />
             Filter {filters.length > 0 && `(${filters.length})`}
@@ -627,10 +647,18 @@ export default function TableToolbar({
               setShowHideFields(false);
               setShowSearchBox(false);
             }}
-            className={`flex items-center gap-1 hover:underline ${showSortDropdown ? 'text-blue-600' : ''}`}
+            className={`flex items-center gap-1 px-2 py-1 rounded-md ${
+              sortRules.filter(rule => rule.columnId).length > 0
+                ? "bg-[#ffe0cc] text-gray-700"
+                : showSortDropdown
+                ? "text-gray-600"
+                : "hover:bg-gray-100"
+            }`}
           >
             <ArrowUpDown className="w-4 h-4" />
-            Sort {sortRules.filter(rule => rule.columnId).length > 0 && `(${sortRules.filter(rule => rule.columnId).length})`}
+            Sort{" "}
+            {sortRules.filter(rule => rule.columnId).length > 0 &&
+              `(${sortRules.filter(rule => rule.columnId).length})`}
           </button>
 
           {/* Add Rows */}

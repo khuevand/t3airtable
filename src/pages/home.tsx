@@ -20,6 +20,14 @@ import {
   Ellipsis,
   Database,
   Trash2,
+  User,
+  Users,
+  Languages,
+  Palette,
+  Mail,
+  Link as LucideLink,
+  Wrench,
+  LogOut
 } from "lucide-react";
 import { useUser, SignOutButton } from "@clerk/nextjs";
 import { useRouter } from "next/router";
@@ -188,32 +196,74 @@ export default function HomeDashboard() {
             </button>
 
             {isOpen && (
-              <div className="absolute right-0 z-10 mt-2 w-64 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 font-sans text-sm text-gray-800">
-                <div className="px-4 py-3 border-b">
+              <div className="absolute right-0 z-10 mt-2 w-64 rounded-md bg-white shadow-lg border border-gray-200 ring-opacity-5 font-sans text-sm text-gray-800">
+                <div className="px-4 py-3 border-b border-gray-200">
                   <p className="font-semibold">{user?.fullName}</p>
                   <p className="text-xs text-gray-500">{user?.primaryEmailAddress?.emailAddress}</p>
                 </div>
 
-                <ul className="py-2">
-                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer">Account</li>
-                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex justify-between">
-                    <span>Manage groups</span>
-                    <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">Business</span>
+                <ul className="py-2 space-y-1">
+                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center text-[13px] gap-2">
+                    <User className="w-3.5 h-3.5" />
+                    Account
                   </li>
-                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer">Notification preferences</li>
-                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer">Language preferences</li>
-                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex justify-between">
-                    <span>Appearance</span>
-                    <span className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full">Beta</span>
+                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center text-[13px] justify-between">
+                    <div className="flex items-center gap-2">
+                      <Users className="w-3.5 h-3.5" />
+                      Manage groups
+                    </div>
+                    <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 text-[11px] rounded-full">Business</span>
                   </li>
-                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer">Integrations</li>
-                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer">Builder hub</li>
-                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-red-500">Trash</li>
+                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center text-[13px] gap-2">
+                    <Bell className="w-3.5 h-3.5" />
+                    Notification preferences
+                  </li>
+                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center text-[13px] gap-2">
+                    <Languages className="w-3.5 h-3.5" />
+                    Language preferences
+                  </li>
+                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center text-[13px] justify-between border-b border-gray-200 mb-2">
+                    <div className="flex items-center gap-2">
+                      <Palette className="w-3.5 h-3.5" />
+                      Appearance
+                    </div>
+                    <span className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 text-[11px] rounded-full">Beta</span>
+                  </li>
+
+                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center text-[13px] gap-2">
+                    <Mail className="w-3.5 h-3.5" />
+                    Contact sales
+                  </li>
+                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center text-[13px] gap-2">
+                    <Star className="w-3.5 h-3.5" />
+                    Upgrade
+                  </li>
+                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center text-[13px] gap-2 border-b border-gray-200 mb-2">
+                    <Mail className="w-3.5 h-3.5" />
+                    Tell a friend
+                  </li>
+
+                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center text-[13px] gap-2">
+                    <LucideLink className="w-3.5 h-3.5" />
+                    Integrations
+                  </li>
+                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center text-[13px] gap-2">
+                    <Wrench className="w-3.5 h-3.5" />
+                    Builder hub
+                  </li>
+                  <li className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center text-[13px] gap-2 border-t border-gray-200">
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Trash
+                  </li>
                 </ul>
 
-                <div className="border-t px-4 py-2">
+                <div className="px-4">
                   <SignOutButton>
-                    <button className="w-full text-left hover:bg-gray-100 px-2 py-1 rounded-md text-red-600">
+                    <button className="w-full flex items-center gap-2 text-left text-[13px]
+                    
+                    
+                    hover:bg-gray-100 py-1 rounded-md mb-1">
+                      <LogOut className="w-3.5 h-3.5" />
                       Log out
                     </button>
                   </SignOutButton>
