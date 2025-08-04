@@ -697,8 +697,13 @@
       
       if (isBaseLoading) {
         return (
-          <div className="h-screen flex items-center justify-center text-gray-500 text-sm">
-            Loading base...
+          <div className="h-screen flex items-center justify-center text-gray-500 text-sm font-medium">
+            Loading base
+            <span className="ml-1 flex space-x-1">
+              <span className="animate-bounce [animation-delay:0s]">.</span>
+              <span className="animate-bounce [animation-delay:0.15s]">.</span>
+              <span className="animate-bounce [animation-delay:0.3s]">.</span>
+            </span>
           </div>
         );
       }
@@ -872,7 +877,7 @@
                   <div
                     className={`flex items-center px-4 py-1 rounded-t-md border border-gray-200 cursor-pointer ${
                       table.id === activeTableId
-                        ? "bg-white text-black border-b-white font-medium"
+                        ? "bg-white text-black border-b-white font-semibold"
                         : "text-gray-500 hover:text-black border-transparent"
                     }`}
                   >
@@ -963,14 +968,24 @@
               {/* Table Content */}
               <main ref={tableRef} className="flex-1 overflow-auto bg-gray-50">
                 {isTableLoading ? (
-                  <p className="text-gray-500 mb-4">Loading table…</p>
+                  <div className="flex items-center justify-center h-full min-h-[300px]">
+                    <p className="text-gray-500 text-sm flex items-center">
+                      Loading table
+                      <span className="ml-1 flex space-x-1">
+                        <span className="animate-bounce [animation-delay:0s]">.</span>
+                        <span className="animate-bounce [animation-delay:0.15s]">.</span>
+                        <span className="animate-bounce [animation-delay:0.3s]">.</span>
+                      </span>
+                    </p>
+                  </div>
+                  // change this to circle loading
                 ) : tableData ? (
                   <div className="flex flex-col h-full">
                     {/* Single table with virtualized body */}
                     <div
                       ref={tableContainerRef}
-                      className="flex-1 overflow-auto bg-white"
-                      style={{ height: 'calc(100vh - 300px)' }}
+                      className="flex-1 bg-white"
+                      style={{ height: 'calc(100vh - 300px)', overflow: 'visible' }}
                     >
                       <table className="min-w-full border border-gray-300 bg-white table-fixed">
                         {/* Fixed Header */}
@@ -985,7 +1000,7 @@
                                     set({activeCell: { row: 0, col: index }});
                                     set({editColumnName: header.column.columnDef.header as string})
                                   }}
-                                  className={`relative group border-b border-r border-gray-300 px-2 py-1 text-sm text-gray-800 text-left hover:bg-gray-100 ${
+                                  className={`relative group border-b border-r border-gray-300 px-2 py-1 text-sm text-gray-800 text-left hover:bg-gray-100 font-semibold ${
                                     selectedColIndex === index ? "bg-blue-50" : ""
                                   } ${
                                     isColumnSorted(header.column.id) ? "bg-[ffe0cc]" : ""
@@ -1243,16 +1258,15 @@
                                                 {/* Right-click dropdown for row deletion */}
                                                 {contextRow === rowData.id && index === 0 && (
                                                   <div
-                                                    className="absolute z-20 top-full left-0 bg-white border rounded shadow-md text-sm px-2 py-1 min-w-[160px] max-w-[220px] w-fit"
+                                                    className="absolute z-[60] bottom-full left-0 mb-1 bg-white border border-gray-200 shadow-xl rounded text-sm px-2 py-1 w-fit min-w-[160px] max-w-[220px]"
+                                                    style={{ boxShadow: '0 8px 16px rgba(0,0,0,0.2)' }}
                                                   >
                                                     <button
-                                                      className="text-red-500 hover:underline text-xs w-full text-left"
+                                                      className="text-red-500 hover:bg-red-50 hover:text-red-600 w-full text-left px-2 py-1 rounded"
                                                       onClick={() => {
-                                                        const confirmDelete = confirm("Are you sure you want to delete this row?");
-                                                        if (confirmDelete) {
+                                                        if (confirm("Are you sure you want to delete this row?")) {
                                                           handleDeleteRow(rowData.id);
-                                                          // setContextRow(null);
-                                                          set({contextRow: null})
+                                                          set({ contextRow: null });
                                                         }
                                                       }}
                                                     >
@@ -1360,26 +1374,25 @@
                                                   flexRender(cell.column.columnDef.cell, cell.getContext())
                                                 )}
 
-                                                {/* Right-click dropdown for row deletion */}
-                                                {contextRow === row.id && index === 0 && (
-                                                  <div
-                                                    className="absolute z-20 top-full left-0 bg-white border rounded shadow-md text-sm px-2 py-1 min-w-[160px] max-w-[220px] w-fit"
-                                                  >
-                                                    <button
-                                                      className="text-red-500 hover:underline text-xs w-full text-left"
-                                                      onClick={() => {
-                                                        const confirmDelete = confirm("Are you sure you want to delete this row?");
-                                                        if (confirmDelete) {
-                                                          handleDeleteRow(row.id);
-                                                          // setContextRow(null);
-                                                          set({contextRow: null});
-                                                        }
-                                                      }}
-                                                    >
-                                                      Delete row
-                                                    </button>
-                                                  </div>
-                                                )}
+                                            {/* normal table data context menu */}
+                                            {contextRow === row.id && index === 0 && (
+                                              <div
+                                                className="absolute z-20 bottom-full left-0 mb-1 bg-white border rounded shadow-md text-sm px-2 py-1 min-w-[160px] max-w-[220px] w-fit"
+                                              >
+                                                <button
+                                                  className="text-red-500 hover:underline text-xs w-full text-left"
+                                                  onClick={() => {
+                                                    const confirmDelete = confirm("Are you sure you want to delete this row?");
+                                                    if (confirmDelete) {
+                                                      handleDeleteRow(row.id);
+                                                      set({contextRow: null});
+                                                    }
+                                                  }}
+                                                >
+                                                  Delete row
+                                                </button>
+                                              </div>
+                                            )}
                                               </div>
                                             ))}
                                             {/* Empty cell for the "+" column */}

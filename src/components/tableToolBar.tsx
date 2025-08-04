@@ -9,6 +9,9 @@ import {
   ChevronDown,
   ToggleLeft,
   ToggleRight,
+  PaintBucket,
+  SquareArrowOutUpRight,
+  Logs
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useDebounce } from "use-debounce";
@@ -275,11 +278,12 @@ export default function TableToolbar({
       return;
     }
 
+    toast.info("Started creating 15,000 rows...");
+
     try {
       await createRowsMutation.mutateAsync({ tableId, count: 15000 });
     } catch (error) {
       console.error("Error creating rows:", error);
-      // Error handling is done in the mutation onError callback
     }
   };
 
@@ -639,6 +643,14 @@ export default function TableToolbar({
             Filter {filters.length > 0 && `(${filters.length})`}
           </button>
 
+          {/* Group */}
+          <button
+            className={`flex items-center gap-1 px-2 py-1 rounded-md`}
+          >
+            <Logs className="w-4 h-4" />
+            Group{" "}
+          </button>
+
           {/* Sort */}
           <button
             onClick={() => {
@@ -661,14 +673,30 @@ export default function TableToolbar({
               `(${sortRules.filter(rule => rule.columnId).length})`}
           </button>
 
+          {/* Group */}
+          <button
+            className={`flex items-center gap-1 px-2 py-1 rounded-md`}
+          >
+            <PaintBucket className="w-4 h-4" />
+            Color{" "}
+          </button>
+
           {/* Add Rows */}
           <button
             onClick={handleCreateRows}
             disabled={createRowsMutation.isPending || !isLoaded || !isSignedIn}
-            className="text-xs bg-[#1778f7] hover:bg-[#70aaf5] text-white px-3 py-1 rounded-xl disabled:bg-gray-400"
+            className="text-xs bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-xl disabled:bg-gray-400"
             title={!isSignedIn ? "Sign in required" : ""}
           >
             {createRowsMutation.isPending ? "Creating..." : "Add 15k Rows"}
+          </button>
+
+          {/* Share and sync */}
+          <button
+            className={`flex items-center gap-1 px-2 py-1 rounded-md`}
+          >
+            <SquareArrowOutUpRight className="w-4 h-4" />
+            Share and sync{" "}
           </button>
 
           {/* Search */}
