@@ -51,7 +51,7 @@ export const sortRouter = createTRPCRouter({
       return 0;
     });
 
-      console.log("✅ Sorted order of row IDs:", sortedRows.map(r => r.id));
+      console.log("Sorted order of row IDs:", sortedRows.map(r => r.id));
       return sortedRows;
     }),
 });

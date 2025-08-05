@@ -11,9 +11,11 @@ import {
   ToggleRight,
   PaintBucket,
   SquareArrowOutUpRight,
-  Logs
+  Logs,
+  Plus,
+  Loader2
 } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useDebounce } from "use-debounce";
 import { useAuth } from "@clerk/nextjs"; 
 import { api } from "~/utils/api";
@@ -24,6 +26,7 @@ import { useUIStore } from "~/stores/useUIstores";
 interface SortRule {
   columnId: string;
   direction: "asc" | "desc";
+  logicalOperator?: "AND" | "OR"; // Optional because first rule doesn't need one
 }
 
 interface FilterCondition {
@@ -44,12 +47,13 @@ interface Props {
   onToggleColumnVisibility: (columnId: string) => void;
   columns: Column[];
   columnVisibility: Record<string, boolean>;
-  data: any[] | null;
   onFilteredDataChange: (filteredData: any[] | null) => void;
   sortRules: SortRule[];
   setSortRules: (rules: SortRule[]) => void;
   onApplySort: (rules: SortRule[]) => void;
   tableId: string;
+  onDataRefresh?: () => void; // Data refresh
+  onRowsAppended?: (newRows: any[]) => void;
 }
 
 // Constants
@@ -64,20 +68,23 @@ const FILTER_OPERATORS = [
 
 const OPERATORS_WITHOUT_VALUE = ["is empty", "is not empty"];
 
+const BATCH_SIZE = 1000; // Create in batches of 1000
+
 export default function TableToolbar({
   onSearchChange,
   searchResult,
   onToggleColumnVisibility,
   columns,
   columnVisibility,
-  data,
   onFilteredDataChange,
-  sortRules, // Use the prop instead of local state
-  setSortRules, // Use the prop instead of local state
+  sortRules,
+  setSortRules,
   onApplySort,
   tableId,
+  onDataRefresh,
 }: Props) {
   const { isSignedIn, isLoaded } = useAuth();
+  const utils = api.useUtils();
 
   // Hide state
   const visibilityMap = useUIStore((state) => state.columnVisibility);
@@ -100,10 +107,16 @@ export default function TableToolbar({
   const [selectedOperator, setSelectedOperator] = useState("contains");
   const [filterValue, setFilterValue] = useState("");
   
-  // REMOVED: Local sort state - now using props
-  // const [sortRules, setSortRules] = useState<SortRule[]>([
-  //   { columnId: "", direction: "asc" },
-  // ]);
+  // Row creation state - simplified for 15k rows only
+  const [creationProgress, setCreationProgress] = useState<{
+    isCreating: boolean;
+    created: number;
+    batchNumber: number;
+  }>({
+    isCreating: false,
+    created: 0,
+    batchNumber: 0,
+  });
   
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
@@ -122,23 +135,26 @@ export default function TableToolbar({
     }
   });
 
-  const sortRecordsMutation = api.sort.getSortedRecords.useMutation({
-    onSuccess: (data) => {
-      onFilteredDataChange(data);
-    },
-    onError: (error) => {
-      console.error('Sort error:', error);
-      toast.error('Failed to apply sorting');
-    }
-  });
+  // Optimized batch row creation mutation for 15k rows
+  const createRowsBatchMutation = api.row.createManyRowsBatch.useMutation({
+    onSuccess: (data, variables) => {
+      const { batchNumber, totalBatches } = variables;
+      setCreationProgress(prev => ({
+        ...prev,
+        created: prev.created + BATCH_SIZE,
+        batchNumber: batchNumber,
+      }));
 
-  const createRowsMutation = api.row.createManyRows.useMutation({
-    onSuccess: () => {
-      toast.success("15,000 rows created!");
+      if (batchNumber === totalBatches) {
+        setCreationProgress({ isCreating: false, created: 0, batchNumber: 0 });
+        toast.success(`Successfully created 15,000 rows!`);
+        onDataRefresh?.();
+      }
     },
-    onError: (error) => {
-      console.error('Create rows error:', error);
-      toast.error("Failed to create rows.");
+    onError: (error, variables) => {
+      console.error('Create rows batch error:', error);
+      setCreationProgress({ isCreating: false, created: 0, batchNumber: 0 });
+      toast.error(`Failed to create batch ${variables.batchNumber}. ${error.message}`);
     }
   });
 
@@ -148,7 +164,6 @@ export default function TableToolbar({
   }, [debounced, onSearchChange]);
 
   useEffect(() => {
-    // Reset form when table changes
     resetFilterForm();
   }, [tableId]);
 
@@ -181,12 +196,56 @@ export default function TableToolbar({
     return columns.find(col => col.id === columnId)?.name || columnId;
   };
 
-  const closeAllDropdowns = () => {
-    setShowFilterDropdown(false);
-    setShowHideFields(false);
-    setShowSearchBox(false);
-    setShowSortDropdown(false);
-  };
+  // Simplified row creation for 15k rows with batching
+  const handleCreateRows = useCallback(async () => {
+    if (!isLoaded) {
+      toast.error('Authentication still loading...');
+      return;
+    }
+
+    if (!isSignedIn) {
+      toast.error('You must be signed in to create rows');
+      return;
+    }
+
+    if (creationProgress.isCreating) {
+      toast.warning('Row creation already in progress');
+      return;
+    }
+
+    // front end on table tool bar that shows the current rows adding process
+    const totalRows = 15000;
+    const totalBatches = Math.ceil(totalRows / BATCH_SIZE);
+
+    setCreationProgress({
+      isCreating: true,
+      created: 0,
+      batchNumber: 0,
+    });
+
+    try {
+      for (let i = 1; i <= totalBatches; i++) {
+        const currentBatchSize = i === totalBatches 
+          ? totalRows - (i - 1) * BATCH_SIZE 
+          : BATCH_SIZE;
+
+        await createRowsBatchMutation.mutateAsync({
+          tableId,
+          count: currentBatchSize,
+          batchNumber: i,
+          totalBatches,
+        });
+
+        // Small delay between batches
+        if (i < totalBatches) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+    } catch (error) {
+      console.error('Error in batch creation:', error);
+      setCreationProgress({ isCreating: false, created: 0, batchNumber: 0 });
+    }
+  }, [isLoaded, isSignedIn, creationProgress.isCreating, tableId, onDataRefresh]);
 
   // Event handlers
   const handleAddFilter = () => {
@@ -209,7 +268,6 @@ export default function TableToolbar({
       return;
     }
 
-    // Check authentication before making the request
     if (!isLoaded) {
       toast.error('Authentication still loading...');
       return;
@@ -221,6 +279,7 @@ export default function TableToolbar({
     }
 
     try {
+      console.log(filters);
       await filterRecordsMutation.mutateAsync({
         tableId: tableId,
         filters: filters,
@@ -228,7 +287,6 @@ export default function TableToolbar({
       });
     } catch (error) {
       console.error("Error applying filters:", error);
-      // Error handling is done in the mutation onError callback
     }
   };
 
@@ -255,36 +313,33 @@ export default function TableToolbar({
   };
 
   const handleAddSortRule = () => {
-    setSortRules([...sortRules, { columnId: "", direction: "asc" }]);
+    setSortRules([...sortRules, { 
+      columnId: "", 
+      direction: "asc",
+      logicalOperator: "AND" // Default to AND for new rules
+    }]);
   };
 
   const handleRemoveSortRule = (index: number) => {
-    setSortRules(sortRules.filter((_, i) => i !== index));
+    const updatedRules = sortRules.filter((_, i) => i !== index);
+    setSortRules(updatedRules);
+
+    // If no valid sort remains, reset to default
+    const hasValidSort = updatedRules.some(rule => rule.columnId);
+    if (!hasValidSort) {
+      onApplySort([]);
+    } else {
+      onApplySort(updatedRules);
+    } 
+
+    void utils.table.getTableById.invalidate();
   };
+
 
   const handleClearAllSorts = () => {
     setSortRules([]);
     onApplySort([]);
-  };
-
-  const handleCreateRows = async () => {
-    if (!isLoaded) {
-      toast.error('Authentication still loading...');
-      return;
-    }
-
-    if (!isSignedIn) {
-      toast.error('You must be signed in to create rows');
-      return;
-    }
-
-    toast.info("Started creating 15,000 rows...");
-
-    try {
-      await createRowsMutation.mutateAsync({ tableId, count: 15000 });
-    } catch (error) {
-      console.error("Error creating rows:", error);
-    }
+    void utils.table.getTableById.invalidate();
   };
 
   const handleUpdateSortRule = (index: number, field: keyof SortRule, value: any) => {
@@ -298,7 +353,7 @@ export default function TableToolbar({
   // Initialize sortRules if empty when component mounts
   useEffect(() => {
     if (sortRules.length === 0) {
-      setSortRules([{ columnId: "", direction: "asc" }]);
+      setSortRules([{ columnId: "", direction: "asc" }]); // First rule doesn't need logicalOperator
     }
   }, []);
 
@@ -516,7 +571,7 @@ export default function TableToolbar({
   );
 
   const renderSortDropdown = () => (
-    <div className="absolute right-0 top-full mt-1 z-50 w-80 bg-white border rounded shadow-md px-3 py-3 text-sm">
+    <div className="absolute right-0 top-full mt-1 z-50 w-96 bg-white border rounded shadow-md px-3 py-3 text-sm">
       <div className="flex items-center justify-between mb-3">
         <span className="text-sm font-medium text-gray-700">Sort Rows</span>
         <button
@@ -527,62 +582,119 @@ export default function TableToolbar({
         </button>
       </div>
 
-      {sortRules.map((rule, index) => (
-        <div key={index} className="flex gap-2 mb-2">
-          <select
-            value={rule.columnId}
-            onChange={(e) => handleUpdateSortRule(index, 'columnId', e.target.value)}
-            className="flex-1 border px-2 py-1 rounded text-xs"
-          >
-            <option value="">Select column</option>
-            {columns.map((col) => (
-              <option key={col.id} value={col.id}>{col.name}</option>
-            ))}
-          </select>
+      <div className="space-y-3">
+        {sortRules.map((rule, index) => (
+          <div key={index} className="space-y-2">
+            {/* Show logical operator for rules after the first one */}
+            {index > 0 && (
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-gray-500 font-medium">Then sort by:</span>
+                <select
+                  value={rule.logicalOperator || "AND"}
+                  onChange={(e) => handleUpdateSortRule(index, 'logicalOperator', e.target.value)}
+                  className="border px-2 py-1 rounded text-xs bg-gray-50"
+                >
+                  <option value="AND">AND (both conditions)</option>
+                  <option value="OR">OR (either condition)</option>
+                </select>
+              </div>
+            )}
 
-          <select
-            value={rule.direction}
-            onChange={(e) => handleUpdateSortRule(index, 'direction', e.target.value)}
-            className="w-24 border px-2 py-1 rounded text-xs"
-          >
-            <option value="asc">A → Z / 1 → 9</option>
-            <option value="desc">Z → A / 9 → 1</option>
-          </select>
+            {/* Sort rule configuration */}
+            <div className="flex gap-2 items-center">
+              {index === 0 && (
+                <span className="text-xs text-gray-500 font-medium min-w-fit">Sort by:</span>
+              )}
 
-          {index > 0 && (
-            <button
-              onClick={() => handleRemoveSortRule(index)}
-              className="text-xs text-red-500"
-            >
-              ✕
-            </button>
-          )}
+              <select
+                value={rule.columnId}
+                onChange={(e) => handleUpdateSortRule(index, 'columnId', e.target.value)}
+                className="flex-1 border px-2 py-1 rounded text-xs"
+              >
+                <option value="">Select column</option>
+                {columns.map((col) => (
+                  <option key={col.id} value={col.id}>{col.name}</option>
+                ))}
+              </select>
+
+              <select
+                value={rule.direction}
+                onChange={(e) => handleUpdateSortRule(index, 'direction', e.target.value)}
+                className="w-32 border px-2 py-1 rounded text-xs"
+              >
+                <option value="asc">A → Z / 1 → 9</option>
+                <option value="desc">Z → A / 9 → 1</option>
+              </select>
+
+              {/* Show X button for every rule */}
+              <button
+                onClick={() => handleRemoveSortRule(index)}
+                className="text-red-500 hover:text-red-700 p-1"
+                title="Remove this sort rule"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+
+            {/* Visual separator for multiple rules */}
+            {index < sortRules.length - 1 && (
+              <div className="border-l-2 border-gray-200 ml-2 pl-2">
+                <div className="text-xs text-gray-400">↓</div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Sort Rules Preview */}
+      {sortRules.some(rule => rule.columnId) && (
+        <div className="mt-4 p-2 bg-gray-50 rounded border">
+          <div className="text-xs font-medium text-gray-700 mb-1">Sort Preview:</div>
+          <div className="text-xs text-gray-600">
+            {sortRules
+              .filter(rule => rule.columnId)
+              .map((rule, index) => {
+                const columnName = getColumnName(rule.columnId);
+                const direction = rule.direction === 'asc' ? '↑' : '↓';
+                const operator = index > 0 ? ` ${rule.logicalOperator} ` : '';
+                return `${operator}${columnName} ${direction}`;
+              })
+              .join('')}
+          </div>
         </div>
-      ))}
-
-      <button
-        onClick={handleAddSortRule}
-        className="text-blue-600 text-xs mt-1"
-      >
-        + Add another sort
-      </button>
-
-      <button
-        onClick={handleApplySort}
-        className="mt-3 bg-blue-600 text-white text-xs px-3 py-1 rounded w-full"
-        disabled={sortRules.length === 0 || sortRules.some(rule => !rule.columnId)}
-      >
-        Apply Sort
-      </button>
-
-      {sortRules.length > 0 && (
-        <button
-          onClick={handleClearAllSorts}
-          className="text-red-600 text-xs mt-2"
-        >
-          Clear All Sorts
-        </button>
       )}
+
+      <div className="flex gap-2 mt-4">
+        <button
+          onClick={handleAddSortRule}
+          className="text-blue-600 hover:text-blue-800 text-xs px-2 py-1 border border-blue-200 rounded hover:bg-blue-50"
+        >
+          + Add another sort
+        </button>
+
+        <button
+          onClick={handleApplySort}
+          className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded flex-1"
+          disabled={sortRules.length === 0 || sortRules.every(rule => !rule.columnId)}
+        >
+          Apply Sort
+        </button>
+
+        {sortRules.length > 0 && (
+          <button
+            onClick={handleClearAllSorts}
+            className="text-red-600 hover:text-red-800 text-xs px-2 py-1 border border-red-200 rounded hover:bg-red-50"
+          >
+            Clear All
+          </button>
+        )}
+      </div>
+
+      {/* Help text */}
+      <div className="mt-3 text-xs text-gray-500 bg-blue-50 p-2 rounded">
+        <strong>AND:</strong> Both conditions must be met for sorting<br/>
+        <strong>OR:</strong> Either condition can be used for sorting
+      </div>
     </div>
   );
 
@@ -644,11 +756,9 @@ export default function TableToolbar({
           </button>
 
           {/* Group */}
-          <button
-            className={`flex items-center gap-1 px-2 py-1 rounded-md`}
-          >
+          <button className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-gray-100">
             <Logs className="w-4 h-4" />
-            Group{" "}
+            Group
           </button>
 
           {/* Sort */}
@@ -673,30 +783,37 @@ export default function TableToolbar({
               `(${sortRules.filter(rule => rule.columnId).length})`}
           </button>
 
-          {/* Group */}
-          <button
-            className={`flex items-center gap-1 px-2 py-1 rounded-md`}
-          >
+          {/* Color */}
+          <button className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-gray-100">
             <PaintBucket className="w-4 h-4" />
-            Color{" "}
+            Color
           </button>
 
-          {/* Add Rows */}
+          {/* Add 15K Rows - Simple button with batching optimization */}
           <button
             onClick={handleCreateRows}
-            disabled={createRowsMutation.isPending || !isLoaded || !isSignedIn}
-            className="text-xs bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-xl disabled:bg-gray-400"
+            disabled={creationProgress.isCreating || !isLoaded || !isSignedIn}
+            className={`flex items-center gap-1 text-xs px-3 py-1 rounded-xl transition-colors ${
+              creationProgress.isCreating
+                ? "bg-blue-100 text-blue-700 cursor-not-allowed"
+                : "bg-gray-600 hover:bg-gray-500 text-white"
+            } disabled:bg-gray-400`}
             title={!isSignedIn ? "Sign in required" : ""}
           >
-            {createRowsMutation.isPending ? "Creating..." : "Add 15k Rows"}
+            {creationProgress.isCreating ? (
+              <>
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              "Add 15k Rows"
+            )}
           </button>
 
           {/* Share and sync */}
-          <button
-            className={`flex items-center gap-1 px-2 py-1 rounded-md`}
-          >
+          <button className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-gray-100">
             <SquareArrowOutUpRight className="w-4 h-4" />
-            Share and sync{" "}
+            Share and sync
           </button>
 
           {/* Search */}
@@ -716,6 +833,28 @@ export default function TableToolbar({
           </div>
         </div>
       </div>
+
+      {/* Progress Bar for 15K Row Creation (when creating) */}
+      {creationProgress.isCreating && (
+        <div className="px-4 py-2 bg-blue-50 border-b border-blue-200">
+          <div className="flex items-center justify-between text-sm text-blue-800 mb-1">
+            <span>Creating 15,000 rows...</span>
+            <span>{Math.round((creationProgress.created / 15000) * 100)}%</span>
+          </div>
+          <div className="w-full bg-blue-200 rounded-full h-1.5">
+            <div 
+              className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+              style={{ 
+                width: `${(creationProgress.created / 15000) * 100}%` 
+              }}
+            />
+          </div>
+          <div className="text-xs text-blue-600 mt-1">
+            {creationProgress.created.toLocaleString()} of 15,000 rows created
+            {creationProgress.batchNumber > 0 && ` • Batch ${creationProgress.batchNumber}`}
+          </div>
+        </div>
+      )}
 
       {/* Dropdowns */}
       {showFilterDropdown && renderFilterDropdown()}

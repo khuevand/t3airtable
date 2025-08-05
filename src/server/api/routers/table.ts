@@ -103,41 +103,206 @@ export const tableRouter = createTRPCRouter({
         return tables;
     }),
 
+//     getTableById: privateProcedure
+//     .input(
+//         z.object({
+//         baseId: z.string(),
+//         tableId: z.string(),
+//         limit: z.number().optional().default(100),
+//         offset: z.number().optional().default(0),
+//         })
+//     )
+//     .query(async ({ ctx, input }) => {
+//         const table = await ctx.db.table.findUnique({
+//         where: {
+//             id: input.tableId,
+//         },
+//         include: {
+//             columns: {
+//             orderBy: { order: 'asc' },
+//             },
+//             rows: {
+//             take: input.limit,
+//             skip: input.offset,
+//             include: {
+//                 cells: true,
+//             },
+//             },
+//         },
+//         });
+
+//     if (!table) throw new Error("Table not found");
+
+//     return {
+//       id: table.id,
+//       name: table.name,
+//       columns: table.columns,
+//       rows: table.rows.map(row => ({
+//         id: row.id,
+//         cells: row.cells.map(cell => ({
+//           columnId: cell.columnId,
+//           value: cell.value,
+//           id: cell.id,
+//           rowId: cell.rowId,
+//         })),
+//       })),
+//     };
+//   }),
+
+// In your tRPC router (e.g. table.ts)
+
+    // getTableById: privateProcedure
+    // .input(
+    //     z.object({
+    //     baseId: z.string(),
+    //     tableId: z.string(),
+    //     limit: z.number().optional().default(100),
+    //     cursor: z.string().optional(), // <-- last row ID
+    //     })
+    // )
+    // .query(async ({ ctx, input }) => {
+    //     const rows = await ctx.db.row.findMany({
+    //     where: { tableId: input.tableId },
+    //     take: input.limit + 1, // Fetch one extra row to check for next page
+    //     skip: input.cursor ? 1 : 0,
+    //     cursor: input.cursor ? { id: input.cursor } : undefined,
+    //     include: {
+    //         cells: true,
+    //     },
+    //     orderBy: { id: 'asc' }, // Ensure consistent ordering
+    //     });
+
+    //     const nextRow = rows.length > input.limit ? rows.pop() : null;
+
+    //     const table = await ctx.db.table.findUnique({
+    //     where: { id: input.tableId },
+    //     include: {
+    //         columns: { orderBy: { order: 'asc' } },
+    //     },
+    //     });
+
+    //     if (!table) throw new Error("Table not found");
+
+    //     const hasNextPage = rows.length > input.limit;
+    //     const resultRows = hasNextPage ? rows.slice(0, input.limit) : rows;
+    //     const nextCursor = hasNextPage && rows.length > 0 ? rows[input.limit - 1]?.id ?? null : null;
+
+    //     return {
+    //         id: table.id,
+    //         name: table.name,
+    //         columns: table.columns,
+    //         rows: rows.map(row => ({
+    //             id: row.id,
+    //             cells: row.cells.map(cell => ({
+    //             columnId: cell.columnId,
+    //             value: cell.value,
+    //             id: cell.id,
+    //             rowId: cell.rowId,
+    //             })),
+    //         })),
+    //         nextCursor,
+    //         hasNextPage,
+    //     };
+    // }),
+
     getTableById: privateProcedure
-    .input(z.object({ baseId: z.string(), tableId: z.string() }))
-    .query(async ({ ctx, input }) => {
-        const table = await ctx.db.table.findUnique({
-        where: {
-            id: input.tableId,
-        },
-        include: {
-            columns: {
-            orderBy: { order: 'asc' },
-            },
-            rows: {
-            include: {
-                cells: true,
-            },
-            },
-        },
-        });
+  .input(
+    z.object({
+      baseId: z.string(),
+      tableId: z.string(),
+      limit: z.number().optional().default(100),
+      cursor: z.string().optional(), // last row ID
+    })
+  )
+  .query(async ({ ctx, input }) => {
+    // Fetch rows with cursor-based pagination
+    const rows = await ctx.db.row.findMany({
+      where: { tableId: input.tableId },
+      take: input.limit + 1, // Fetch one extra to check if there's more
+      skip: input.cursor ? 1 : 0, // Skip the cursor row itself
+      cursor: input.cursor ? { id: input.cursor } : undefined,
+      include: {
+        cells: true,
+      },
+      orderBy: { id: 'asc' }, // Use createdAt for consistent ordering
+    });
 
-        if (!table) {
-        throw new Error("Table not found");
-        }
+    // Get table info
+    const table = await ctx.db.table.findUnique({
+      where: { id: input.tableId },
+      include: {
+        columns: { orderBy: { order: 'asc' } },
+      },
+    });
 
-        // Transform the data to match your frontend expectations
-        return {
-        id: table.id,
-        name: table.name,
-        columns: table.columns,
-        rows: table.rows.map(row => ({
-            id: row.id,
-            cells: row.cells.map(cell => ({
-            columnId: cell.columnId,
-            value: cell.value,
-            })),
+    if (!table) throw new Error("Table not found");
+
+    // Check if there are more pages
+    const hasNextPage = rows.length > input.limit;
+    const resultRows = hasNextPage ? rows.slice(0, input.limit) : rows;
+    const nextCursor = hasNextPage ? resultRows[resultRows.length - 1]?.id : null;
+
+    console.log('Backend pagination:', {
+      inputCursor: input.cursor,
+      totalFetched: rows.length,
+      limit: input.limit,
+      hasNextPage,
+      nextCursor,
+      resultRowsCount: resultRows.length
+    });
+
+    return {
+      id: table.id,
+      name: table.name,
+      columns: table.columns,
+      rows: resultRows.map(row => ({
+        id: row.id,
+        cells: row.cells.map(cell => ({
+          columnId: cell.columnId,
+          value: cell.value,
+          id: cell.id,
+          rowId: cell.rowId,
         })),
-        };
+      })),
+      nextCursor,
+      hasNextPage,
+    };
+  }),
+
+
+  
+    getTableRows: privateProcedure
+    .input(
+      z.object({
+        tableId: z.string(),
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(10).max(100).default(50),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const { tableId, page, pageSize } = input;
+
+      const rows = await ctx.db.row.findMany({
+        where: { tableId },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: { id: "asc" },
+      });
+
+      const rowIds = rows.map((row) => row.id);
+      const cells = await ctx.db.cell.findMany({
+        where: { rowId: { in: rowIds } },
+      });
+
+      const totalRows = await ctx.db.row.count({ where: { tableId } });
+
+      return {
+        rows,
+        cells,
+        totalRows,
+        totalPages: Math.ceil(totalRows / pageSize),
+        currentPage: page,
+      };
     }),
+
 });

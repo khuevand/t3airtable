@@ -39,6 +39,9 @@ interface UIState {
   hovered: boolean;
   userProfile: boolean;
 
+  // Editable Cell
+  isFocused: boolean;
+
   // Setters
   set: (state: Partial<UIState>) => void;
 }
@@ -63,6 +66,7 @@ export const useUIStore = create<UIState>((set) => ({
   sortedData: null,
   hovered: false,
   userProfile: false,
+  isFocused: false,
 
   // Unified setter
   set: (state) => set((prev) => ({ ...prev, ...state })),

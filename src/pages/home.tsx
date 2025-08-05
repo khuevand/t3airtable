@@ -68,8 +68,9 @@ export default function HomeDashboard() {
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [activeMenuBaseId, setActiveMenuBaseId] = useState<string | null>(null);
+  const [confirmDeleteBaseId, setConfirmDeleteBaseId] = useState<string | null>(null);
+
 
   // Computed state
   const sidebarExpanded = isSidebarOpen || isHovered;
@@ -117,7 +118,7 @@ export default function HomeDashboard() {
       {
         onSuccess: () => {
           toast.success("Base moved to trash.");
-          setShowConfirm(false);
+          setConfirmDeleteBaseId(null);
           refetch();
         },
         onError: () => toast.error("Something went wrong while deleting."),
@@ -559,20 +560,20 @@ export default function HomeDashboard() {
                             className="p-1 rounded hover:bg-gray-100"
                             onClick={(e) => {
                               e.stopPropagation(); // prevent redirect
-                              setShowMenu((prev) => !prev);
+                              setActiveMenuBaseId(base.id);
                             }}
                           >
                             <Ellipsis className="w-4 h-4" />
                           </button>
 
                           {/* Dropdown menu */}
-                          {showMenu && (
+                          {activeMenuBaseId === base.id && (
                             <div className="absolute right-0 mt-2 w-28 bg-white border border-gray-200 rounded-md shadow-lg z-30">
                               <button
                                 onClick={(e) => {
-                                  e.stopPropagation(); // prevent redirect
-                                  setShowConfirm(true);
-                                  setShowMenu(false);
+                                  e.stopPropagation();
+                                  setConfirmDeleteBaseId(base.id);
+                                  setActiveMenuBaseId(null);
                                 }}
                                 className="w-full flex items-center px-3 py-2 text-sm text-red-600 hover:bg-gray-50"
                               >
@@ -585,7 +586,7 @@ export default function HomeDashboard() {
                       </div>
 
                       {/* Confirmation modal */}
-                      {showConfirm && (
+                      {confirmDeleteBaseId === base.id && (
                         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
                           <div className="bg-white p-6 rounded shadow-lg z-50 w-[300px]">
                             <h2 className="text-lg font-semibold mb-4">Confirm Delete</h2>
@@ -593,7 +594,7 @@ export default function HomeDashboard() {
                             <div className="flex justify-end gap-2">
                               <button
                                 className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 text-sm"
-                                onClick={() => setShowConfirm(false)}
+                                onClick={() => setConfirmDeleteBaseId(null)}
                               >
                                 Cancel
                               </button>

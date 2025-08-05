@@ -52,16 +52,27 @@ export const filterRouter = createTRPCRouter({
 
           case "does not contain":
             return {
-              NOT: {
-                cells: {
-                  some: {
-                    columnId: columnId,
-                    value: {
-                      contains: value,
+              OR: [
+                {
+                  cells: {
+                    none: {
+                      columnId,
                     },
                   },
                 },
-              },
+                {
+                  cells: {
+                    some: {
+                      columnId,
+                      NOT: {
+                        value: {
+                          contains: value,
+                        },
+                      },
+                    },
+                  },
+                },
+              ],
             } as Prisma.RowWhereInput;
 
           case "is":
@@ -155,7 +166,7 @@ export const filterRouter = createTRPCRouter({
         if (filters.length > 1) {
           const filterConditions = filters
             .map((filter) => ({
-              tableId: tableId, // ✅ Include tableId in each condition
+              tableId: tableId,
               ...buildFilterCondition(filter.columnId, filter.operator, filter.value),
             }))
             .filter((condition) => Object.keys(condition).length > 0);

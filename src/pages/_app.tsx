@@ -23,7 +23,7 @@ const MyApp: AppType = ({ Component, pageProps }) => {
   >
     <div>
       <Component {...pageProps} />
-      <ToastContainer position="bottom-left" />
+      <ToastContainer autoClose={3200} pauseOnHover position="bottom-left" />
     </div>
   </ClerkProvider>
 );
