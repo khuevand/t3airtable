@@ -95,7 +95,7 @@ const EditableCell: React.FC<EditableCellProps> = ({
   }, [initialValue]);
 
   const highlightedText = useMemo(() => 
-    highlightSearchTerm(value || '', searchTerm), 
+    highlightSearchTerm(String(value || ''), searchTerm), 
     [value, searchTerm]
   );
 
@@ -1333,6 +1333,7 @@ export default function BasePage() {
                                         } ${
                                           isColumnSorted(cell.column.id) ? "bg-[#ffe0cc]" : ""
                                         }`}
+
                                         style={{ 
                                           display: 'table-cell',
                                           width: index === 0 ? '200px' : '150px',
