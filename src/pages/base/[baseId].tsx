@@ -421,7 +421,7 @@ export default function BasePage() {
         header: col.name,
         cell: (props: CellContext<FlattenedRow, unknown>) => (
           <EditableCell
-            initialValue={String(props.getValue() || "")}
+            initialValue={String(props.getValue() ?? "")}
             tableId={activeTableId}
             rowId={props.row.id}
             columnId={props.column.id}
@@ -438,16 +438,18 @@ export default function BasePage() {
     if (!filteredData && sortedData) return sortedData;
     if (!filteredData || !sortedData) return [];
 
-    const filteredIds = new Set(filteredData.map(row => row.id as string));
-    return sortedData.filter(row => filteredIds.has(row.id as string));
+    const filteredIds = new Set(filteredData.map(row => row.id));
+    return sortedData.filter(row => filteredIds.has(row.id));
   }, [filteredData, sortedData, tableData?.rows]);
 
   const memorizedTransformedRows = useMemo<FlattenedRow[]>(() => {
-    return finalRows.map((row: any) => {
+    return finalRows.map((row: BackendRow) => {
       const values: FlattenedRow = { id: row.id };
       if (Array.isArray(row.cells)) {
         for (const cell of row.cells) {
-          values[String(cell.columnId)] = cell.value ?? '';
+          if (cell.columnId && cell.columnId !== null) {
+            values[String(cell.columnId)] = cell.value ?? '';
+          }
         }
       }
       return values;
@@ -556,15 +558,6 @@ export default function BasePage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [set]);
 
-  // Focus active cell
-  useEffect(() => {
-    if (activeCell) {
-      const input = document.querySelector(
-        `[data-row="${activeCell.row}"][data-col="${activeCell.col}"]`
-      );
-    }
-  }, [activeCell]);
-
   useEffect(() => { 
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       console.error('Unhandled promise rejection:', event.reason);
@@ -641,9 +634,9 @@ export default function BasePage() {
         const fallbackTable =
           updatedBase.tables.find((t) => t.id !== tableIdToDelete) ?? updatedBase.tables[0];
 
-        void set({ activeTableId: fallbackTable?.id ?? null });
+        set({ activeTableId: fallbackTable?.id ?? null });
       } else {
-        void set({ activeTableId: null });
+        set({ activeTableId: null });
       }
     } catch (err) {
       if (!isCancelledError(err)) {
