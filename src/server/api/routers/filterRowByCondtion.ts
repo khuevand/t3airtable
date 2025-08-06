@@ -160,28 +160,15 @@ export const filterRouter = createTRPCRouter({
       if (filters.length > 1) {
         // Handle multiple filters with specified logical operator
         const filterConditions = filters
-          .map((filter) => buildFilterCondition(filter.columnId, filter.operator, filter.value))
+          .map((filter) => ({
+            tableId: tableId,
+            ...buildFilterCondition(filter.columnId, filter.operator, filter.value),
+          }))
           .filter((condition) => Object.keys(condition).length > 0);
 
-        if (filters.length > 1) {
-          const filterConditions = filters
-            .map((filter) => ({
-              tableId: tableId,
-              ...buildFilterCondition(filter.columnId, filter.operator, filter.value),
-            }))
-            .filter((condition) => Object.keys(condition).length > 0);
-
-          whereClause = {
-            [logicalOperator]: filterConditions,
-          };
-        } else {
-          const filter = filters[0]!;
-          const filterCondition = buildFilterCondition(filter.columnId, filter.operator, filter.value);
-          whereClause = {
-            tableId: tableId,
-            ...filterCondition,
-          };
-        }
+        whereClause = {
+          [logicalOperator]: filterConditions,
+        };
 
       } else {
         // Handle single filter
@@ -202,7 +189,7 @@ export const filterRouter = createTRPCRouter({
           include: {
             cells: {
               include: {
-                column: true, // Include column info for better debugging
+                column: true,
               },
             },
           },

@@ -28,7 +28,7 @@ export const baseRouter = createTRPCRouter({
       update: {},
       create: {
         id: user.id,
-        email: user.emailAddresses[0]?.emailAddress || "",
+        email: user.emailAddresses[0]?.emailAddress ?? "",
         name: user.firstName ?? "",
       },
     });

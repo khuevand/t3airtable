@@ -8,9 +8,7 @@ import {
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import AiBuilderBox from "~/components/aiBuilders";
-import home from "~/pages/home";
 import Head from "next/head";
-import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -25,7 +23,7 @@ export default function Home() {
 
   useEffect(() => {
   if (isSignedIn && router.pathname === "/") {
-    router.push("/home");
+    void router.push("/home");
   }
   }, [isSignedIn, router]);
 
@@ -58,7 +56,7 @@ export default function Home() {
             <Link
               href="#"
               className="flex items-center gap-1 text-base font-medium text-blue-700 hover:underline cursor-pointer">
-              <span>See what's possible</span>
+              <span>See what&apos;s possible</span>
               <ArrowRight className="w-4 h-4 text-blue-700" />
             </Link>
           </div>
@@ -150,7 +148,7 @@ export default function Home() {
           </h1>
           <div className="mt-10 flex items-start gap-110">
             <p className="max-w-5xl text-left text-[25px] font-[490] leading-[1.1] text-gray-800">
-              Skip the code. Transform your data into custom interfaces, automations, and agents with Airtable's AI-native app platform.
+              Skip the code. Transform your data into custom interfaces, automations, and agents with Airtable&apos;s AI-native app platform.
             </p>
             <div className="flex justify-center gap-2">
               <button className="flex items-center gap-2 rounded-full border px-3 py-3 bg-black text-base text-white font-semibold hover:bg-slate-700">

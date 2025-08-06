@@ -8,11 +8,7 @@ import "~/styles/globals.css";
 import {
   ClerkProvider,
 } from '@clerk/nextjs'
-import { dark, neobrutalism } from '@clerk/themes'
-
-const geist = Geist({
-  subsets: ["latin"],
-});
+import { neobrutalism } from '@clerk/themes'
 
 const MyApp: AppType = ({ Component, pageProps }) => {
   return (

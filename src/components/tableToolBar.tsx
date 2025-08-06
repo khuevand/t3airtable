@@ -12,7 +12,6 @@ import {
   PaintBucket,
   SquareArrowOutUpRight,
   Logs,
-  Plus,
   Loader2
 } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -68,7 +67,7 @@ const FILTER_OPERATORS = [
 
 const OPERATORS_WITHOUT_VALUE = ["is empty", "is not empty"];
 
-const BATCH_SIZE = 1000; // Create in batches of 1000
+const BATCH_SIZE = 1000;
 
 export default function TableToolbar({
   onSearchChange,
@@ -87,7 +86,6 @@ export default function TableToolbar({
   const utils = api.useUtils();
 
   // Hide state
-  const visibilityMap = useUIStore((state) => state.columnVisibility);
   const isAnyColumnHidden = Object.values(columnVisibility).some((visible) => !visible);
 
   // Search state

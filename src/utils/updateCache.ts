@@ -1,13 +1,16 @@
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "~/server/api/root";
+import { api } from "~/utils/api";
 
 type RouterOutput = inferRouterOutputs<AppRouter>;
 type TableData = RouterOutput["table"]["getTableById"];
 
+type TRPCUtils = ReturnType<typeof api.useUtils>;
+
 type CacheUpdateFn = (old: TableData | undefined) => TableData | undefined;
 
 export function updateTableCache(
-  utils: any, // or `ReturnType<typeof api.useUtils>` if you want stronger types
+  utils: TRPCUtils, 
   baseId: string,
   tableId: string,
   updateFn: CacheUpdateFn

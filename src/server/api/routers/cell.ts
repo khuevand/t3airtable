@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
 import { createTRPCRouter, privateProcedure } from "~/server/api/trpc";
 
 export const cellRouter = createTRPCRouter({
@@ -12,7 +11,6 @@ export const cellRouter = createTRPCRouter({
     })
   )
   .mutation(async ({ ctx, input }) => {
-    // Fix: avoid Prisma.JsonNull — it's unnecessary if value is typed as `Json`
     const updated = await ctx.db.cell.updateMany({
       where: {
         rowId: input.rowId,

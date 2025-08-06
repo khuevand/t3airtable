@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createTRPCRouter, privateProcedure } from "~/server/api/trpc";
 import { faker } from "@faker-js/faker";
 
+
 export const rowRouter = createTRPCRouter({
     addRow: privateProcedure
     .input(z.object({ tableId: z.string() }))

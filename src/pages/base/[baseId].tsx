@@ -1,5 +1,5 @@
 import { useRouter } from "next/router";
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { SignOutButton, useUser } from "@clerk/nextjs";
 import {
   useReactTable,
@@ -51,12 +51,6 @@ interface Table {
   name: string;
 }
 
-interface TableData {
-  name: string;
-  columns: Column[];
-  rows: Row[];
-}
-
 interface Cell {
   id: string;
   rowId: string;
@@ -64,7 +58,7 @@ interface Cell {
   value: string | null;
 }
 
-type RowData = Record<string, any>;
+type RowData = Record<string, unknown>;
 type SortDirection = "asc" | "desc";
 
 interface EditableCellProps {
@@ -86,7 +80,6 @@ type SortRule = {
 
 const EditableCell: React.FC<EditableCellProps> = ({
   initialValue,
-  tableId,
   rowId,
   columnId,
   searchTerm = '',
@@ -99,24 +92,24 @@ const EditableCell: React.FC<EditableCellProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   
   // API
-  const utils = api.useUtils();
   const updateCell = api.cell.updateCell.useMutation();
 
-  const handleBlur = () => {
+  const handleBlur = useCallback(() => {
+    setIsEditing(false);
     if (value !== initialValue) {
       updateCell.mutate({ rowId, columnId, value: value || null });
     }
-  };
+  }, [value, initialValue, updateCell, rowId, columnId]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setValue(e.target.value);
-  };
+  }, []);
 
-  const handleFocus = () => {
+  const handleFocus = useCallback(() => {
     setIsEditing(true);
-  };
+  }, []);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       inputRef.current?.blur();
     }
@@ -124,21 +117,13 @@ const EditableCell: React.FC<EditableCellProps> = ({
       setValue(initialValue || '');
       inputRef.current?.blur();
     }
-  };
+  }, [initialValue]);
 
-  const highlightedText = highlightSearchTerm(value || '', searchTerm);
+  const highlightedText = useMemo(() => 
+    highlightSearchTerm(value || '', searchTerm), 
+    [value, searchTerm]
+  );
 
-  // return (
-  //   <div className="relative w-full">
-  //     <input
-  //       className="w-full border-none bg-transparent text-transparent caret-black focus:outline-none absolute inset-0 z-10"
-  //       value={value}
-  //       onChange={handleChange}
-  //       onBlur={handleBlur}
-  //     />
-  //     <div dangerouslySetInnerHTML={{ __html: highlightedText }} />
-  //   </div>
-  // );
   return (
     <div className="relative w-full min-h-[32px] flex items-center">
       {isEditing ? (
@@ -161,9 +146,7 @@ const EditableCell: React.FC<EditableCellProps> = ({
         >
           {value ? (
             <div dangerouslySetInnerHTML={{ __html: highlightedText }} />
-          ) : (
-            null
-          )}
+          ) : null}
         </div>
       )}
     </div>
@@ -176,25 +159,21 @@ const EditableCell: React.FC<EditableCellProps> = ({
 
 export default function BasePage() {
   // ========================================================================================
-  // HOOKS & REFS
+  // HOOKS & REFS - Move all hooks to the top
   // ========================================================================================
   
   const { user } = useUser();
   const router = useRouter();
   const params = useParams();
-  const baseId = params?.baseId as string;
   const { isLoaded, isSignedIn } = useUser();
 
-  // Authentication
-  if (!isLoaded) return null;
-  if (!isSignedIn) {
-    router.push("/");
-    return null;
-  }
+  // Early returns should come after all hooks
+  const baseId = params?.baseId as string;
 
   // Refs
   const tableRef = useRef<HTMLDivElement>(null);
   const isColumnOperationRef = useRef(false);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
   
   // API utils
   const utils = api.useUtils();
@@ -222,10 +201,6 @@ export default function BasePage() {
   const newColumnType = useUIStore((state) => state.newColumnType);
   const editColumnName = useUIStore((state) => state.editColumnName);
   const contextRow = useUIStore((state) => state.contextRow);
-  const columnContextMenu = useUIStore((state) => state.columnContextMenu);
-  const isColumnSorted = (columnId: string): boolean => {
-    return sortRules.some(rule => rule.columnId === columnId);
-  };
 
   // Visibility state
   const columnVisibility = useUIStore((state) => state.columnVisibility);
@@ -248,16 +223,16 @@ export default function BasePage() {
   // Color Helper
   // ========================================================================================
   
-  function stringToColor(str: string, lightness: number): string {
+  const stringToColor = useCallback((str: string, lightness: number): string => {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
       hash = str.charCodeAt(i) + ((hash << 5) - hash);
     }
     const hue = hash % 360;
     return `hsl(${hue}, 70%, ${lightness}%)`;
-  }
+  }, []);
 
-  function isDarkColor(hsl?: string): boolean {
+  const isDarkColor = useCallback((hsl?: string): boolean => {
     if (typeof hsl !== "string") return false;
 
     const parts = hsl.split(",");
@@ -267,17 +242,20 @@ export default function BasePage() {
     const lightness = lightnessStr ? parseInt(lightnessStr, 10) : NaN;
 
     return !isNaN(lightness) && lightness < 50;
-  }
+  }, []);
 
-  const lighterColor = stringToColor(baseId, 90);
+  const lighterColor = useMemo(() => stringToColor(baseId ?? '', 90), [stringToColor, baseId]);
 
+  const isColumnSorted = useCallback((columnId: string): boolean => {
+    return sortRules.some(rule => rule.columnId === columnId);
+  }, [sortRules]);
 
   // ========================================================================================
   // API QUERIES
   // ========================================================================================
   
   const { data: baseData, isLoading: isBaseLoading, error: baseError } =
-    api.base.getBase.useQuery({ baseId });
+    api.base.getBase.useQuery({ baseId: baseId ?? '' }, { enabled: !!baseId });
 
   const { 
     data: infiniteTableData, 
@@ -285,16 +263,14 @@ export default function BasePage() {
     hasNextPage, 
     isFetchingNextPage,
     isLoading: isTableLoading,
-    error: tableError,
   } = api.table.getTableById.useInfiniteQuery(
     { 
-      baseId: baseId!,
-      tableId: activeTableId!, 
-      limit: 200, // Start with smaller batches for testing
+      baseId: baseId ?? '',
+      tableId: activeTableId ?? '', 
+      limit: 200,
     },
     {
       getNextPageParam: (lastPage) => { 
-        // Return the cursor if there's a next page, otherwise undefined
         return lastPage.hasNextPage ? lastPage.nextCursor : undefined;
       },
       enabled: !!(baseId && activeTableId),
@@ -315,14 +291,14 @@ export default function BasePage() {
     return {
       id: firstPage.id,
       name: firstPage.name,
-      columns: firstPage.columns, // Columns should be the same across pages
+      columns: firstPage.columns,
       rows: allRows
     };
   }, [infiniteTableData]);
 
   const { data: baseName, isLoading } = api.base.getBaseName.useQuery({
-    baseId: baseId!,
-  });
+    baseId: baseId ?? '',
+  }, { enabled: !!baseId });
 
   // ========================================================================================
   // API MUTATIONS
@@ -330,8 +306,7 @@ export default function BasePage() {
   
   const addTable = api.table.addTable.useMutation({
     onSuccess: (newTable) => {
-      // Optimistically update the UI before refetch
-      utils.base.getBase.setData({ baseId }, (old) => {
+      utils.base.getBase.setData({ baseId: baseId ?? '' }, (old) => {
         if (!old) return old;
         return {
           ...old,
@@ -339,8 +314,7 @@ export default function BasePage() {
         };
       });
       
-      // Background refetch to ensure consistency
-      void utils.base.getBase.invalidate({ baseId });
+      void utils.base.getBase.invalidate({ baseId: baseId ?? '' });
     },
     onError: (error) => {
       console.error("Add table error:", error);
@@ -355,14 +329,13 @@ export default function BasePage() {
   const removeTable = api.table.deleteTable.useMutation({
     onError: (e) => console.error("Delete table error:", e),
     onSuccess: () => {
-      void utils.base.getBase.invalidate({ baseId });
+      void utils.base.getBase.invalidate({ baseId: baseId ?? '' });
     },
   });
 
   const createColumn = api.column.addColumn.useMutation({
     onSuccess: (newColumn) => { 
-      // Optimistically update table data
-      if (activeTableId) {
+      if (activeTableId && baseId) {
         utils.table.getTableById.setData({ baseId, tableId: activeTableId }, (old) => {
           if (!old) return old;
           return {
@@ -372,8 +345,7 @@ export default function BasePage() {
         });
       }
       
-      // Background refetch
-      void utils.table.getTableById.invalidate({ baseId, tableId: activeTableId! });
+      void utils.table.getTableById.invalidate({ baseId: baseId ?? '', tableId: activeTableId ?? '' });
     },
     onError: (error) => {
       console.error("Add column error:", error);
@@ -383,17 +355,16 @@ export default function BasePage() {
   const removeColumn = api.column.deleteColumn.useMutation({
     onError: (e) => console.error("Delete column error:", e),
     onSuccess: () => {
-      void utils.table.getTableById.invalidate({ baseId });
+      void utils.table.getTableById.invalidate({ baseId: baseId ?? '' });
     }
   });
 
   const createRow = api.row.addRow.useMutation({
     onSuccess: (newRow) => {
       toast.success("Row added successfully!", {});
-      void utils.table.getTableById.invalidate({ baseId });
+      void utils.table.getTableById.invalidate({ baseId: baseId ?? '' });
 
-      // Optimistically update the table data
-      if (activeTableId) {
+      if (activeTableId && baseId) {
         utils.table.getTableById.setData({ baseId, tableId: activeTableId }, (old) => {
           if (!old) return old;
           return {
@@ -412,7 +383,7 @@ export default function BasePage() {
   const deleteRow = api.row.deleteRow.useMutation({
     onError: (e) => console.error("Delete row error:", e),
     onSuccess: ({ rowId }) => {
-      if (!activeTableId) return;
+      if (!activeTableId || !baseId) return;
       utils.table.getTableById.setData({ baseId, tableId: activeTableId }, (old) => {
         if (!old) return old;
         return {
@@ -426,7 +397,7 @@ export default function BasePage() {
   const renameColumn = api.column.renameColumn.useMutation({
     onError: (e) => console.error("Rename column error:", e),
     onSuccess: ({ columnId, newName }) => {
-      if (!activeTableId) return;
+      if (!activeTableId || !baseId) return;
       utils.table.getTableById.setData({ baseId, tableId: activeTableId }, (old) => {
         if (!old) return old;
         return {
@@ -440,7 +411,7 @@ export default function BasePage() {
   });
 
   const sortRecordsMutation = api.sort.getSortedRecords.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data: RowData[]) => {
       console.log("Sorted rows returned:", data);
       set({ sortedData: data });
     },
@@ -452,7 +423,7 @@ export default function BasePage() {
 
   const createManyRows = api.row.createManyRowsBatch.useMutation({
     onSuccess: async () => {
-      await utils.table.getTableRows.invalidate({ tableId: activeTableId! });
+      await utils.table.getTableRows.invalidate({ tableId: activeTableId ?? '' });
       if (tableContainerRef.current) tableContainerRef.current.scrollTop = 0;
     },
     onError: (error) => {
@@ -461,262 +432,7 @@ export default function BasePage() {
   });
 
   // ========================================================================================
-  // EFFECTS
-  // ========================================================================================
-  
-  // Set initial active table when base data loads
-  useEffect(() => {
-    if (baseData && baseData.tables[0]) {
-      // setActiveTableId(baseData.tables[0].id);
-      set({ activeTableId: baseData.tables[0].id });
-    }
-  }, [baseData]);
-
-  // Initialize column visibility when table data loads
-  useEffect(() => {
-    if (!tableData) return;
-
-    const visibilityState = tableData.columns.reduce((acc, col) => {
-      acc[col.id] = col.visible;
-      return acc;
-    }, {} as Record<string, boolean>);
-    // setColumnVisibility(visibilityState);
-    set({ columnVisibility: visibilityState });
-  }, [tableData]);
-
-  // Reset filtered data when table data loads
-  useEffect(() => {
-    if (tableData) {
-      // setFilteredData(null);
-      set({ filteredData: null });
-    }
-  }, [tableData]);
-
-  // Reset sorted data when active table changes
-  useEffect(() => {
-    set({ sortedData: null });
-  }, [activeTableId]);
-
-  // Click outside handler
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (tableRef.current && !tableRef.current.contains(e.target as Node)) {
-        set({ selectedRows: new Set()});
-        set({ allSelected: false});
-        if (!isColumnOperationRef.current) {
-          set({selectedColIndex: null});
-          set({columnContextMenu: null});
-        }
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  // Focus active cell
-  useEffect(() => {
-      const input = document.querySelector(
-        `[data-row="${activeCell?.row}"][data-col="${activeCell?.col}"]`
-      ) as HTMLInputElement | null;
-      input?.focus();
-    }, [activeCell]);
-
-  useEffect(() => { 
-    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      console.error('Unhandled promise rejection:', event.reason);
-      toast.error('An unexpected error occurred. Please refresh the page.');
-    };
-
-    window.addEventListener('unhandledrejection', handleUnhandledRejection);
-    
-    return () => {
-      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-    };
-  }, []);
-  // ========================================================================================
-  // EVENT HANDLERS
-  // ========================================================================================
-  
-  const handleSearchChange = (val: string) => {
-    setSearchTerm(val);
-    toast.dismiss();
-  };
-
-  const handleAddTable = async () => {
-    if (!baseId) {
-      toast.error("Base ID not found");
-      return;
-    }
-    
-    // Prevent multiple rapid clicks
-    if (addTable.isPending) {
-      toast.warn("Table is already being created...");
-      return;
-    }
-    
-    try {
-      await addTable.mutateAsync({ baseId });
-    } catch (error) {
-      // Error handling is done in the mutation's onError
-      console.error("Table creation failed:", error);
-    }
-  };
-
-  const handleDeleteTable = async (tableIdToDelete: string) => {
-    if (!baseId || !activeTableId) return;
-
-    try {
-      await removeTable.mutateAsync({ tableId: tableIdToDelete });
-      await utils.base.getBase.invalidate({ baseId });
-      const updatedBase = await utils.base.getBase.fetch({ baseId });
-
-      if (updatedBase?.tables.length > 0) {
-        const fallbackTable =
-          updatedBase.tables.find((t) => t.id !== tableIdToDelete) ?? updatedBase.tables[0];
-
-        set({ activeTableId: fallbackTable?.id ?? null });
-      } else {
-        set({ activeTableId: null });
-      }
-    } catch (err) {
-      if (!isCancelledError(err)) {
-        console.error("Failed to delete table:", err);
-      }
-    }
-  };
-
-  const handleAddColumn = async () => {
-    if (!baseId || !activeTableId) {
-      toast.error("Missing required information");
-      return;
-    }
-    
-    if (!newColumnName.trim()) {
-      toast.error("Column name is required");
-      return;
-    }
-    
-    // Prevent multiple rapid clicks
-    if (createColumn.isPending) {
-      toast.warn("Column is already being created...");
-      return;
-    }
-    
-    try {
-      await createColumn.mutateAsync({ 
-        tableId: activeTableId, 
-        name: newColumnName.trim(), 
-        type: newColumnType 
-      });
-      
-      // Reset form
-      set({ 
-        isAddingColumn: false,
-        newColumnName: "",
-        newColumnType: "text"
-      });
-    } catch (error) {
-      // Error handling is done in the mutation's onError
-      console.error("Column creation failed:", error);
-    }
-  };
-
-  const handleDeleteColumn = async (columnId: string) => {
-    if (!baseId || !activeTableId) return;
-    
-    isColumnOperationRef.current = true;
-    
-    try {
-      await removeColumn.mutateAsync({ columnId });
-      set({selectedColIndex: null});
-      set({columnContextMenu: null});
-    } finally {
-      setTimeout(() => {
-        isColumnOperationRef.current = false;
-      }, 100);
-    }
-  };
-
-  const handleAddRow = async () => {
-    if (!baseId || !activeTableId) {
-      toast.error("Missing required information");
-      return;
-    }
-    
-    // Prevent multiple rapid clicks
-    if (createRow.isPending) {
-      toast.warn("Row is already being created...");
-      return;
-    }
-    
-    try {
-      await createRow.mutateAsync({ tableId: activeTableId });
-    } catch (error) {
-      // Error handling is done in the mutation's onError7
-      console.error("Row creation failed:", error);
-    }
-  };
-
-  const handleDeleteRow = async (rowId: string) => {
-    if (!baseId || !activeTableId) return;
-    deleteRow.mutate({ rowId: rowId });
-  };
-
-  const handleRenameColumn = async (columnId: string, newName: string) => {
-    if (!baseId || !activeTableId) return;
-    
-    isColumnOperationRef.current = true;
-    
-    try {
-      await renameColumn.mutateAsync({ columnId: columnId, newName: newName });
-    } finally {
-      setTimeout(() => {
-        isColumnOperationRef.current = false;
-      }, 500);
-    }
-  };
-
-  const handleApplySort = (rules: { columnId: string; direction: string }[]) => {
-    if (!tableData) return;
-    
-    const finalRules = rules.length === 0
-      ? [{ columnId: "createdAt", direction: "asc" as SortDirection }]
-      : rules.map((r) => ({
-          columnId: r.columnId,
-          direction: (r.direction === "desc" ? "desc" : "asc") as SortDirection,
-        }));
-
-    sortRecordsMutation.mutate({
-      tableId: tableData.id,
-      sortBy: finalRules,
-    });
-  };
-
-  const handleToggleColumnVisibility = async (columnId: string) => {
-    const newVisibility = !columnVisibility[columnId];
-    const currentVisibility = useUIStore.getState().columnVisibility;
-    set({
-      columnVisibility: {
-        ...currentVisibility,
-        [columnId]: newVisibility,
-      },
-    });
-
-
-    updateColumnVisibility.mutate({
-      columnId,
-      visible: newVisibility,
-    });
-  };
-
-  const handleFilteredDataChange = (data: RowData[] | null) => {
-    set({filteredData: data});
-  };
-
-  const toggleUserMenu = () => set({userProfile: !userProfile});
-
-  // ========================================================================================
-  // COMPUTED VALUES
+  // COMPUTED VALUES - Move before useEffect hooks
   // ========================================================================================
   
   // Table columns definition
@@ -757,15 +473,13 @@ export default function BasePage() {
 
   const memorizedTransformedRows = useMemo(() => {
     return finalRows.map((row) => {
-      const values: Record<string, any> = { id: row.id };
-      for (let i = 0; i < row.cells.length; i++) {
-        const cell = row.cells[i];
+      const values: Record<string, unknown> = { id: row.id };
+      for (const cell of row.cells) {
         values[cell.columnId] = cell.value ?? '';
       }
       return values;
     });
   }, [finalRows]);
-
 
   // Search results calculation
   const searchResults = useMemo(() => {
@@ -801,18 +515,96 @@ export default function BasePage() {
     data: memorizedTransformedRows,
     columns: memorizedColumns,
     getCoreRowModel: getCoreRowModel(),
-    getRowId: (row) => row.id,
+    getRowId: (row) => String(row.id),
   });
-
-    // ref
-  const tableContainerRef = useRef<HTMLDivElement>(null);
 
   const rowVirtualizer = useVirtualizer({
     count: memorizedTransformedRows.length,
     getScrollElement: () => tableContainerRef.current,
     estimateSize: () => 40,
-    overscan: 10, // Reduced overscan for better performance
+    overscan: 10,
   });
+
+  // ========================================================================================
+  // EFFECTS
+  // ========================================================================================
+  
+  // Authentication check
+  useEffect(() => {
+    if (isLoaded && !isSignedIn) {
+      void router.push("/");
+    }
+  }, [isLoaded, isSignedIn, router]);
+
+  // Set initial active table when base data loads
+  useEffect(() => {
+    if (baseData?.tables?.[0] && !activeTableId) {
+      set({ activeTableId: baseData.tables[0].id });
+    }
+  }, [baseData, activeTableId, set]);
+
+  // Initialize column visibility when table data loads
+  useEffect(() => {
+    if (!tableData) return;
+
+    const visibilityState = tableData.columns.reduce((acc, col) => {
+      acc[col.id] = col.visible;
+      return acc;
+    }, {} as Record<string, boolean>);
+    
+    set({ columnVisibility: visibilityState });
+  }, [tableData, set]);
+
+  // Reset filtered data when table data loads
+  useEffect(() => {
+    if (tableData) {
+      set({ filteredData: null });
+    }
+  }, [tableData, set]);
+
+  // Reset sorted data when active table changes
+  useEffect(() => {
+    set({ sortedData: null });
+  }, [activeTableId, set]);
+
+  // Click outside handler
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (tableRef.current && !tableRef.current.contains(e.target as Node)) {
+        set({ selectedRows: new Set()});
+        set({ allSelected: false});
+        if (!isColumnOperationRef.current) {
+          set({selectedColIndex: null});
+          set({columnContextMenu: null});
+        }
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [set]);
+
+  // Focus active cell
+  useEffect(() => {
+    if (activeCell) {
+      const input = document.querySelector(
+        `[data-row="${activeCell.row}"][data-col="${activeCell.col}"]`
+      ) as HTMLInputElement | null;
+      input?.focus();
+    }
+  }, [activeCell]);
+
+  useEffect(() => { 
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      console.error('Unhandled promise rejection:', event.reason);
+      toast.error('An unexpected error occurred. Please refresh the page.');
+    };
+
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    
+    return () => {
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
 
   // Add this useEffect to handle infinite scrolling
   useEffect(() => {
@@ -827,18 +619,197 @@ export default function BasePage() {
     
     // Prefetch when user is 30% through the current data
     if (progressPercentage > 30 && hasNextPage && !isFetchingNextPage) {
-      console.log('Prefetching next page at 50% progress');
-      fetchNextPage();
+      console.log('Prefetching next page at 30% progress');
+      void fetchNextPage();
     }
   }, [
-    rowVirtualizer.getVirtualItems(),
+    rowVirtualizer,
     memorizedTransformedRows.length,
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage
   ]);
+
+  // ========================================================================================
+  // EVENT HANDLERS
+  // ========================================================================================
   
+  const handleSearchChange = useCallback((val: string) => {
+    setSearchTerm(val);
+    toast.dismiss();
+  }, []);
+
+  const handleAddTable = useCallback(async () => {
+    if (!baseId) {
+      toast.error("Base ID not found");
+      return;
+    }
+    
+    if (addTable.isPending) {
+      toast.warn("Table is already being created...");
+      return;
+    }
+    
+    try {
+      await addTable.mutateAsync({ baseId });
+    } catch (error) {
+      console.error("Table creation failed:", error);
+    }
+  }, [baseId, addTable]);
+
+  const handleDeleteTable = useCallback(async (tableIdToDelete: string) => {
+    if (!baseId || !activeTableId) return;
+
+    try {
+      await removeTable.mutateAsync({ tableId: tableIdToDelete });
+      await utils.base.getBase.invalidate({ baseId });
+      const updatedBase = await utils.base.getBase.fetch({ baseId });
+
+      if (updatedBase?.tables.length > 0) {
+        const fallbackTable =
+          updatedBase.tables.find((t) => t.id !== tableIdToDelete) ?? updatedBase.tables[0];
+
+        set({ activeTableId: fallbackTable?.id ?? null });
+      } else {
+        set({ activeTableId: null });
+      }
+    } catch (err) {
+      if (!isCancelledError(err)) {
+        console.error("Failed to delete table:", err);
+      }
+    }
+  }, [baseId, activeTableId, removeTable, utils.base.getBase, set]);
+
+  const handleAddColumn = useCallback(async () => {
+    if (!baseId || !activeTableId) {
+      toast.error("Missing required information");
+      return;
+    }
+    
+    if (!newColumnName.trim()) {
+      toast.error("Column name is required");
+      return;
+    }
+    
+    if (createColumn.isPending) {
+      toast.warn("Column is already being created...");
+      return;
+    }
+    
+    try {
+      await createColumn.mutateAsync({ 
+        tableId: activeTableId, 
+        name: newColumnName.trim(), 
+        type: newColumnType 
+      });
+      
+      set({ 
+        isAddingColumn: false,
+        newColumnName: "",
+        newColumnType: "text"
+      });
+    } catch (error) {
+      console.error("Column creation failed:", error);
+    }
+  }, [baseId, activeTableId, newColumnName, newColumnType, createColumn, set]);
+
+  const handleDeleteColumn = useCallback(async (columnId: string) => {
+    if (!baseId || !activeTableId) return;
+    
+    isColumnOperationRef.current = true;
+    
+    try {
+      await removeColumn.mutateAsync({ columnId });
+      set({selectedColIndex: null});
+      set({columnContextMenu: null});
+    } finally {
+      setTimeout(() => {
+        isColumnOperationRef.current = false;
+      }, 100);
+    }
+  }, [baseId, activeTableId, removeColumn, set]);
+
+  const handleAddRow = useCallback(async () => {
+    if (!baseId || !activeTableId) {
+      toast.error("Missing required information");
+      return;
+    }
+    
+    if (createRow.isPending) {
+      toast.warn("Row is already being created...");
+      return;
+    }
+    
+    try {
+      await createRow.mutateAsync({ tableId: activeTableId });
+    } catch (error) {
+      console.error("Row creation failed:", error);
+    }
+  }, [baseId, activeTableId, createRow]);
+
+  const handleDeleteRow = useCallback(async (rowId: string) => {
+    if (!baseId || !activeTableId) return;
+    deleteRow.mutate({ rowId: rowId });
+  }, [baseId, activeTableId, deleteRow]);
+
+  const handleRenameColumn = useCallback(async (columnId: string, newName: string) => {
+    if (!baseId || !activeTableId) return;
+    
+    isColumnOperationRef.current = true;
+    
+    try {
+      await renameColumn.mutateAsync({ columnId: columnId, newName: newName });
+    } finally {
+      setTimeout(() => {
+        isColumnOperationRef.current = false;
+      }, 500);
+    }
+  }, [baseId, activeTableId, renameColumn]);
+
+  const handleApplySort = useCallback((rules: { columnId: string; direction: string }[]) => {
+    if (!tableData) return;
+    
+    const finalRules = rules.length === 0
+      ? [{ columnId: "createdAt", direction: "asc" as SortDirection }]
+      : rules.map((r) => ({
+          columnId: r.columnId,
+          direction: (r.direction === "desc" ? "desc" : "asc") as SortDirection,
+        }));
+
+    sortRecordsMutation.mutate({
+      tableId: tableData.id,
+      sortBy: finalRules,
+    });
+  }, [tableData, sortRecordsMutation]);
+
+  const handleToggleColumnVisibility = useCallback(async (columnId: string) => {
+    const newVisibility = !columnVisibility[columnId];
+    const currentVisibility = useUIStore.getState().columnVisibility;
+    set({
+      columnVisibility: {
+        ...currentVisibility,
+        [columnId]: newVisibility,
+      },
+    });
+
+    updateColumnVisibility.mutate({
+      columnId,
+      visible: newVisibility,
+    });
+  }, [columnVisibility, set, updateColumnVisibility]);
+
+  const handleFilteredDataChange = useCallback((data: RowData[] | null) => {
+    set({filteredData: data});
+  }, [set]);
+
+  const toggleUserMenu = useCallback(() => set({userProfile: !userProfile}), [set, userProfile]);
+
   const virtualItems = rowVirtualizer.getVirtualItems();
+
+  // Early return after all hooks
+  if (!isLoaded) return null;
+
+  if (!isLoaded || !isSignedIn) return null;
 
   // ========================================================================================
   // LOADING & ERROR STATES
@@ -884,7 +855,7 @@ export default function BasePage() {
           className="w-7 h-7 cursor-pointer"
           onMouseEnter={() => set({hovered: true})}
           onMouseLeave={() => set({hovered: false})}
-          onClick={() => router.push("/")}
+          onClick={() => void router.push("/")}
         >
           {hovered ? (
             <ArrowLeft className="w-5 h-5 text-gray-700" />
@@ -967,14 +938,14 @@ export default function BasePage() {
         <div className="flex items-center gap-2 min-w-[220px]">
           <div
             className="w-8 h-8 rounded-md flex items-center justify-center"
-            style={{ backgroundColor: stringToColor(baseId, 50) }}
+            style={{ backgroundColor: stringToColor(baseId ?? '', 50) }}
           >
             <Image
               src="/airtable.png"
               alt="Logo"
               width={28}
               height={28}
-              className={`object-contain ${isDarkColor(stringToColor(baseId, 50)) ? "invert" : ""}`}
+              className={`object-contain ${isDarkColor(stringToColor(baseId ?? '', 50)) ? "invert" : ""}`}
             />
           </div>
 
@@ -1010,7 +981,7 @@ export default function BasePage() {
             Trial: 7 days left
           </span>
           <button className="text-white text-xs px-3 py-1.5 shadow-sm rounded-md font-medium cursor-pointer"
-          style={{ backgroundColor: stringToColor(baseId, 50) }}>
+          style={{ backgroundColor: stringToColor(baseId ?? '', 50) }}>
             Share
           </button>
         </div>
@@ -1066,10 +1037,10 @@ export default function BasePage() {
                       onClick={() => {
                         if (removeTable.isPending) {
                           toast.warn("Table deletion already in progress");
-                        };
-                        handleDeleteTable(table.id);
+                          return;
+                        }
+                        void handleDeleteTable(table.id);
                       }}
-
                     >
                       Delete table
                     </li>
@@ -1110,15 +1081,11 @@ export default function BasePage() {
           sortRules={sortRules}
           setSortRules={(rules) => set({ sortRules: rules })}
           onApplySort={handleApplySort}
-
-          // onDataRefresh callback:
           onDataRefresh={async () => {
-            // Reset virtualization to top
             if (tableContainerRef.current) {
               tableContainerRef.current.scrollTop = 0;
             }
             
-            // Reset any filters/sorts that might limit results
             set({ 
               filteredData: null,
               sortedData: null,
@@ -1126,15 +1093,11 @@ export default function BasePage() {
               allSelected: false
             });
             
-            // Invalidate and refetch data
-            await utils.table.getTableById.invalidate({ baseId, tableId: activeTableId! });
-            await utils.table.getTableById.refetch({ baseId, tableId: activeTableId! });
+            await utils.table.getTableById.invalidate({ baseId: baseId ?? '', tableId: activeTableId ?? '' });
+            await utils.table.getTableById.refetch({ baseId: baseId ?? '', tableId: activeTableId ?? '' });
             
-            // Force re-render of virtualization
             setTimeout(() => {
-              if (rowVirtualizer) {
-                rowVirtualizer.scrollToIndex(0);
-              }
+              rowVirtualizer.scrollToIndex(0);
             }, 100);
           }}
         />
@@ -1171,14 +1134,12 @@ export default function BasePage() {
                   </span>
                 </p>
               </div>
-              // change this to circle loading
             ) : tableData ? (
               <div className="flex flex-col h-full">
                 {/* Single table with virtualized body */}
                 <div
                   ref={tableContainerRef}
                   className="flex-1 bg-white"
-                  // style={{ height: '', overflow: 'visible' }}
                 >
                   <table className="min-w-full border border-gray-300 bg-white table-fixed">
                     {/* Fixed Header */}
@@ -1196,7 +1157,7 @@ export default function BasePage() {
                               className={`relative group border-b border-r border-gray-300 px-2 py-1 text-sm text-gray-800 text-left hover:bg-gray-100 font-semibold ${
                                 selectedColIndex === index ? "bg-blue-50" : ""
                               } ${
-                                isColumnSorted(header.column.id) ? "bg-[ffe0cc]" : ""
+                                isColumnSorted(header.column.id) ? "bg-[#ffe0cc]" : ""
                               }`}
                               style={{ width: index === 0 ? '200px' : '150px' }}
                             >
@@ -1248,8 +1209,7 @@ export default function BasePage() {
                                             className="text-blue-600 hover:underline text-xs"
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              handleRenameColumn(header.column.id, editColumnName);
-                                              // setSelectedColIndex(null);
+                                              void handleRenameColumn(header.column.id, editColumnName);
                                               set({selectedColIndex: null});
                                             }}
                                           >
@@ -1259,7 +1219,6 @@ export default function BasePage() {
                                             className="text-gray-500 hover:underline text-xs"
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              // setSelectedColIndex(null);
                                               set({selectedColIndex: null});
                                             }}
                                           >
@@ -1274,8 +1233,7 @@ export default function BasePage() {
                                           e.stopPropagation();
                                           const confirmDelete = confirm("Are you sure you want to delete this column?");
                                           if (confirmDelete) {
-                                            handleDeleteColumn(header.column.id);
-                                            // setSelectedColIndex(null);
+                                            void handleDeleteColumn(header.column.id);
                                             set({selectedColIndex: null});
                                           }
                                         }}
@@ -1300,7 +1258,7 @@ export default function BasePage() {
                                   onChange={(e) => set({newColumnName: e.target.value})}
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter' && newColumnName.trim()) {
-                                      handleAddColumn();
+                                      void handleAddColumn();
                                     }
                                     if (e.key === 'Escape') {
                                       set({isAddingColumn: false});
@@ -1373,7 +1331,6 @@ export default function BasePage() {
                               position: 'relative',
                             }}
                           >
-
                             {virtualItems.map((virtualRow) => {
                               const row = table.getRowModel().rows[virtualRow.index];
                               if (!row) return null;
@@ -1438,7 +1395,7 @@ export default function BasePage() {
                                               {row.index + 1}
                                             </span>
 
-                                            <div className="flex-1 whitespace-nowra">
+                                            <div className="flex-1 whitespace-nowrap">
                                               {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                             </div>
                                           </div>
@@ -1446,25 +1403,25 @@ export default function BasePage() {
                                           flexRender(cell.column.columnDef.cell, cell.getContext())
                                         )}
 
-                                    {/* normal table data context menu */}
-                                    {contextRow === row.id && index === 0 && (
-                                      <div
-                                        className="absolute z-20 bottom-full left-0 mb-1 bg-white border rounded shadow-md text-sm px-2 py-1 min-w-[160px] max-w-[220px] w-fit"
-                                      >
-                                        <button
-                                          className="text-red-500 hover:underline text-xs w-full text-left"
-                                          onClick={() => {
-                                            const confirmDelete = confirm("Are you sure you want to delete this row?");
-                                            if (confirmDelete) {
-                                              handleDeleteRow(row.id);
-                                              set({contextRow: null});
-                                            }
-                                          }}
-                                        >
-                                          Delete row
-                                        </button>
-                                      </div>
-                                    )}
+                                        {/* normal table data context menu */}
+                                        {contextRow === row.id && index === 0 && (
+                                          <div
+                                            className="absolute z-20 bottom-full left-0 mb-1 bg-white border rounded shadow-md text-sm px-2 py-1 min-w-[160px] max-w-[220px] w-fit"
+                                          >
+                                            <button
+                                              className="text-red-500 hover:underline text-xs w-full text-left"
+                                              onClick={() => {
+                                                const confirmDelete = confirm("Are you sure you want to delete this row?");
+                                                if (confirmDelete) {
+                                                  void handleDeleteRow(row.id);
+                                                  set({contextRow: null});
+                                                }
+                                              }}
+                                            >
+                                              Delete row
+                                            </button>
+                                          </div>
+                                        )}
                                       </div>
                                     ))}
                                     {/* Empty cell for the "+" column */}
@@ -1479,7 +1436,6 @@ export default function BasePage() {
                                 </div>
                               );
                             })}
-
                           </div>
                         </td>
                       </tr>

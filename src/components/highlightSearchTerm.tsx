@@ -2,7 +2,7 @@ export const highlightSearchTerm = (text: string, searchTerm: string): string =>
   if (!searchTerm.trim()) return text;
   
   const parts = text.split(new RegExp(`(${searchTerm})`, 'gi'));
-  return parts.map((part, index) => 
+  return parts.map((part) => 
     part.toLowerCase() === searchTerm.toLowerCase() ? 
       `<mark style="background-color: #fbeabe;">${part}</mark>` : 
       part

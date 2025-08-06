@@ -33,7 +33,7 @@ import { useUser, SignOutButton } from "@clerk/nextjs";
 import { useRouter } from "next/router";
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import clsx from "clsx";
 import { toast } from "react-toastify";
 import { formatDistanceToNow } from "date-fns";
@@ -87,7 +87,6 @@ export default function HomeDashboard() {
   const {
     data: bases = [],
     refetch,
-    isFetching,
     isLoading: isBasesLoading,
   } = api.base.getAll.useQuery(undefined, {
     enabled: isUserLoaded && !!user?.id,
@@ -95,7 +94,7 @@ export default function HomeDashboard() {
   const deleteBaseMutation = api.base.deleteBase.useMutation();
   const createBaseMutation = api.base.createBase.useMutation({
     onSuccess: (data) => {
-      router.push(`/base/${data.baseId}`);
+      void router.push(`/base/${data.baseId}`);
       setIsCreating(false);
     },
     onError: () => {
@@ -119,7 +118,7 @@ export default function HomeDashboard() {
         onSuccess: () => {
           toast.success("Base moved to trash.");
           setConfirmDeleteBaseId(null);
-          refetch();
+          void refetch();
         },
         onError: () => toast.error("Something went wrong while deleting."),
       }
@@ -390,7 +389,7 @@ export default function HomeDashboard() {
             </div>
 
             <button className="flex items-center ml-3 px-3 py-2 text-[13px] text-gray-600 bg-white rounded-md cursor-pointer border border-gray-300 shadow-xs">
-              <span className="font-medium">See what's new</span>
+              <span className="font-medium">See what&apos;s new</span>
             </button>
           </section>
         
