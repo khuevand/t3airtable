@@ -445,7 +445,7 @@ export default function HomeDashboard() {
                           {card.icon}
                           <p className="font-semibold">{card.title}</p>
                         </div>
-                        <p className={card.descColor || "text-gray-500"}>{card.desc}</p>
+                        <p className={card.descColor ?? "text-gray-500"}>{card.desc}</p>
                       </>
                     )}
                   </div>
@@ -516,7 +516,7 @@ export default function HomeDashboard() {
             ) : bases.length === 0 ? (
               <>
                 <p className="text-[21px] text-gray-900 mb-1">
-                  You haven't opened anything recently
+                  You haven&apos;t opened anything recently
                 </p>
                 <p className="mb-4 text-[13px]">Apps that you have recently opened will appear here.</p>
                 <button className="px-2 py-1.5 border border-gray-300 rounded-lg shadow-sm text-sm text-gray-900 bg-white hover:bg-gray-100 transition">

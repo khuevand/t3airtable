@@ -1070,7 +1070,7 @@ export default function BasePage() {
           </button>
         </div>
 
-        <TableToolbar 
+        <TableToolbar   
           onSearchChange={handleSearchChange} 
           searchResult={searchResults}
           onToggleColumnVisibility={handleToggleColumnVisibility}

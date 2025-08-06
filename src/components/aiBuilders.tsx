@@ -17,7 +17,7 @@ export default function AiBuilderBox() {
     }, 4000);
 
     return () => clearTimeout(timeoutRef.current!);
-  }, [index]);
+  });
 
   return (
     <div className="relative flex items-center justify-center bg-[#f6f9f5] py-15 overflow-hidden">

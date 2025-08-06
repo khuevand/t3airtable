@@ -19,9 +19,11 @@ import { useDebounce } from "use-debounce";
 import { useAuth } from "@clerk/nextjs"; 
 import { api } from "~/utils/api";
 import { toast } from "react-toastify";
-import { useUIStore } from "~/stores/useUIstores";
 
-// Types
+// ============================================================================
+// TYPES & INTERFACES
+// ============================================================================
+
 interface SortRule {
   columnId: string;
   direction: "asc" | "desc";
@@ -40,22 +42,48 @@ interface Column {
   visible: boolean;
 }
 
+interface CellData {
+  id: string;
+  value: string | null;
+  rowId: string;
+  columnId: string;
+}
+
+interface TableData {
+  id: string;
+  tableId: string;
+  cells: CellData[];
+}
+
+type RowDataType = Record<string, unknown> & {
+  id: string;
+}
+
 interface Props {
   onSearchChange?: (value: string) => void;
   searchResult?: { totalMatches: number };
   onToggleColumnVisibility: (columnId: string) => void;
   columns: Column[];
   columnVisibility: Record<string, boolean>;
-  onFilteredDataChange: (filteredData: any[] | null) => void;
+  onFilteredDataChange: (filteredData: RowDataType[] | null) => void;
   sortRules: SortRule[];
   setSortRules: (rules: SortRule[]) => void;
   onApplySort: (rules: SortRule[]) => void;
   tableId: string;
   onDataRefresh?: () => void; // Data refresh
-  onRowsAppended?: (newRows: any[]) => void;
+  onRowsAppended?: (newRows: RowDataType[]) => void;
 }
 
-// Constants
+interface CreationProgress {
+  isCreating: boolean;
+  created: number;
+  batchNumber: number;
+}
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
 const FILTER_OPERATORS = [
   { value: "contains", label: "contains" },
   { value: "does not contain", label: "does not contain" },
@@ -66,8 +94,11 @@ const FILTER_OPERATORS = [
 ];
 
 const OPERATORS_WITHOUT_VALUE = ["is empty", "is not empty"];
-
 const BATCH_SIZE = 1000;
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
 
 export default function TableToolbar({
   onSearchChange,
@@ -84,6 +115,10 @@ export default function TableToolbar({
 }: Props) {
   const { isSignedIn, isLoaded } = useAuth();
   const utils = api.useUtils();
+
+  // ============================================================================
+  // STATE MANAGEMENT
+  // ============================================================================
 
   // Hide state
   const isAnyColumnHidden = Object.values(columnVisibility).some((visible) => !visible);
@@ -106,11 +141,7 @@ export default function TableToolbar({
   const [filterValue, setFilterValue] = useState("");
   
   // Row creation state - simplified for 15k rows only
-  const [creationProgress, setCreationProgress] = useState<{
-    isCreating: boolean;
-    created: number;
-    batchNumber: number;
-  }>({
+  const [creationProgress, setCreationProgress] = useState<CreationProgress>({
     isCreating: false,
     created: 0,
     batchNumber: 0,
@@ -121,7 +152,10 @@ export default function TableToolbar({
   const hideFieldsRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  // API mutations
+  // ============================================================================
+  // API MUTATIONS
+  // ============================================================================
+
   const filterRecordsMutation = api.filter.getFilteredRecords.useMutation({
     onSuccess: (data) => {
       onFilteredDataChange(data);
@@ -135,7 +169,7 @@ export default function TableToolbar({
 
   // Optimized batch row creation mutation for 15k rows
   const createRowsBatchMutation = api.row.createManyRowsBatch.useMutation({
-    onSuccess: (data, variables) => {
+    onSuccess: (variables) => {
       const { batchNumber, totalBatches } = variables;
       setCreationProgress(prev => ({
         ...prev,
@@ -156,30 +190,10 @@ export default function TableToolbar({
     }
   });
 
-  // Effects
-  useEffect(() => {
-    if (onSearchChange) onSearchChange(debounced);
-  }, [debounced, onSearchChange]);
+  // ============================================================================
+  // HELPER FUNCTIONS
+  // ============================================================================
 
-  useEffect(() => {
-    resetFilterForm();
-  }, [tableId]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (hideFieldsRef.current && !hideFieldsRef.current.contains(event.target as Node)) {
-        setShowHideFields(false);
-      }
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
-        setShowSearchBox(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Helper functions
   const resetFilterForm = () => {
     setSelectedColumn("");
     setSelectedOperator("contains");
@@ -191,8 +205,12 @@ export default function TableToolbar({
   };
 
   const getColumnName = (columnId: string) => {
-    return columns.find(col => col.id === columnId)?.name || columnId;
+    return columns.find(col => col.id === columnId)?.name ?? columnId;
   };
+
+  // ============================================================================
+  // EVENT HANDLERS
+  // ============================================================================
 
   // Simplified row creation for 15k rows with batching
   const handleCreateRows = useCallback(async () => {
@@ -243,9 +261,8 @@ export default function TableToolbar({
       console.error('Error in batch creation:', error);
       setCreationProgress({ isCreating: false, created: 0, batchNumber: 0 });
     }
-  }, [isLoaded, isSignedIn, creationProgress.isCreating, tableId, onDataRefresh]);
+  }, [isLoaded, isSignedIn, creationProgress.isCreating, tableId, onDataRefresh, createRowsBatchMutation]);
 
-  // Event handlers
   const handleAddFilter = () => {
     if (!selectedColumn) return;
     if (operatorRequiresValue(selectedOperator) && !filterValue.trim()) return;
@@ -333,14 +350,13 @@ export default function TableToolbar({
     void utils.table.getTableById.invalidate();
   };
 
-
   const handleClearAllSorts = () => {
     setSortRules([]);
     onApplySort([]);
     void utils.table.getTableById.invalidate();
   };
 
-  const handleUpdateSortRule = (index: number, field: keyof SortRule, value: any) => {
+  const handleUpdateSortRule = (index: number, field: keyof SortRule, value: string) => {
     const updated = [...sortRules];
     if (updated[index]) {
       updated[index] = { ...updated[index], [field]: value };
@@ -348,14 +364,43 @@ export default function TableToolbar({
     setSortRules(updated);
   };
 
+  // ============================================================================
+  // EFFECTS
+  // ============================================================================
+
+  useEffect(() => {
+    if (onSearchChange) onSearchChange(debounced);
+  }, [debounced, onSearchChange]);
+
+  useEffect(() => {
+    resetFilterForm();
+  }, [tableId]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (hideFieldsRef.current && !hideFieldsRef.current.contains(event.target as Node)) {
+        setShowHideFields(false);
+      }
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSearchBox(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Initialize sortRules if empty when component mounts
   useEffect(() => {
     if (sortRules.length === 0) {
       setSortRules([{ columnId: "", direction: "asc" }]); // First rule doesn't need logicalOperator
     }
-  }, []);
+  }, [setSortRules, sortRules.length]);
 
-  // Render functions
+  // ============================================================================
+  // RENDER FUNCTIONS
+  // ============================================================================
+
   const renderFilterConditions = () => {
     if (filters.length === 0) return null;
 
@@ -588,7 +633,7 @@ export default function TableToolbar({
               <div className="flex items-center gap-2 text-xs">
                 <span className="text-gray-500 font-medium">Then sort by:</span>
                 <select
-                  value={rule.logicalOperator || "AND"}
+                  value={rule.logicalOperator ?? "AND"}
                   onChange={(e) => handleUpdateSortRule(index, 'logicalOperator', e.target.value)}
                   className="border px-2 py-1 rounded text-xs bg-gray-50"
                 >
@@ -654,7 +699,7 @@ export default function TableToolbar({
               .map((rule, index) => {
                 const columnName = getColumnName(rule.columnId);
                 const direction = rule.direction === 'asc' ? '↑' : '↓';
-                const operator = index > 0 ? ` ${rule.logicalOperator} ` : '';
+                const operator = index > 0 ? ` ${rule.logicalOperator ?? 'AND'} ` : '';
                 return `${operator}${columnName} ${direction}`;
               })
               .join('')}
@@ -695,6 +740,10 @@ export default function TableToolbar({
       </div>
     </div>
   );
+
+  // ============================================================================
+  // MAIN RENDER
+  // ============================================================================
 
   return (
     <div className="relative">
