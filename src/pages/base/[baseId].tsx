@@ -28,6 +28,7 @@ import TableToolbar from "~/components/tableToolBar";
 import { highlightSearchTerm } from "~/components/highlightSearchTerm";
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useUIStore } from "~/stores/useUIstores";
+import type { BackendRow, FlattenedRow } from "~/types/row";
 
 // ========================================================================================
 // TYPE DEFINITIONS AND COLOR PICK
@@ -38,14 +39,6 @@ interface Table {
   name: string;
 }
 
-interface Cell {
-  id: string;
-  rowId: string;
-  columnId: string;
-  value: string | null;
-}
-
-type RowData = Record<string, unknown>;
 type SortDirection = "asc" | "desc";
 
 interface EditableCellProps {
@@ -67,7 +60,7 @@ const EditableCell: React.FC<EditableCellProps> = ({
   searchTerm = '',
 }) => {
   // State
-  const [value, setValue] = useState(initialValue || '');
+  const [value, setValue] = useState(initialValue ?? '');
   const [isEditing, setIsEditing] = useState(false);
   
   // Refs
@@ -393,7 +386,7 @@ export default function BasePage() {
   });
 
   const sortRecordsMutation = api.sort.getSortedRecords.useMutation({
-    onSuccess: (data: RowData[]) => {
+    onSuccess: (data: BackendRow[]) => {
       console.log("Sorted rows returned:", data);
       set({ sortedData: data });
     },
@@ -426,7 +419,7 @@ export default function BasePage() {
       .map((col) => ({
         accessorKey: col.id,
         header: col.name,
-        cell: (props: CellContext<RowData, unknown>) => (
+        cell: (props: CellContext<FlattenedRow, unknown>) => (
           <EditableCell
             initialValue={String(props.getValue() || "")}
             tableId={activeTableId}
@@ -438,26 +431,24 @@ export default function BasePage() {
       }));
   }, [tableData, activeTableId, debouncedSearchTerm, columnVisibility]);
 
-  const finalRows = useMemo(() => {
-    // Case 1: No sort, no filter
+  // different combinations of filtering and sorting
+  const finalRows = useMemo<BackendRow[]>(() => {
     if (!filteredData && !sortedData) return tableData?.rows ?? [];
-
-    // Case 2: Filter only
     if (filteredData && !sortedData) return filteredData;
-
-    // Case 3: Sort only
     if (!filteredData && sortedData) return sortedData;
+    if (!filteredData || !sortedData) return [];
 
-    // Case 4: Filter + Sort → apply filter on sorted result
-    const filteredIds = new Set(filteredData!.map(row => row.id));
-    return sortedData!.filter(row => filteredIds.has(row.id));
+    const filteredIds = new Set(filteredData.map(row => row.id as string));
+    return sortedData.filter(row => filteredIds.has(row.id as string));
   }, [filteredData, sortedData, tableData?.rows]);
 
-  const memorizedTransformedRows = useMemo(() => {
-    return finalRows.map((row) => {
-      const values: Record<string, unknown> = { id: row.id };
-      for (const cell of row.cells) {
-        values[cell.columnId] = cell.value ?? '';
+  const memorizedTransformedRows = useMemo<FlattenedRow[]>(() => {
+    return finalRows.map((row: any) => {
+      const values: FlattenedRow = { id: row.id };
+      if (Array.isArray(row.cells)) {
+        for (const cell of row.cells) {
+          values[String(cell.columnId)] = cell.value ?? '';
+        }
       }
       return values;
     });
@@ -482,7 +473,7 @@ export default function BasePage() {
     // Count matches in all cells
     tableData.rows.forEach(row => {
       row.cells.forEach(cell => {
-        const cellValue = String(cell.value || '').toLowerCase();
+        const cellValue = String(cell.value ?? '').toLowerCase();
         if (cellValue.includes(searchLower)) {
           totalMatches++;
         }
@@ -493,7 +484,7 @@ export default function BasePage() {
   }, [debouncedSearchTerm, tableData]);
 
   // Initialize TanStack table
-  const table = useReactTable<RowData>({
+  const table = useReactTable<FlattenedRow>({
     data: memorizedTransformedRows,
     columns: memorizedColumns,
     getCoreRowModel: getCoreRowModel(),
@@ -570,8 +561,7 @@ export default function BasePage() {
     if (activeCell) {
       const input = document.querySelector(
         `[data-row="${activeCell.row}"][data-col="${activeCell.col}"]`
-      ) as HTMLInputElement | null;
-      input?.focus();
+      );
     }
   }, [activeCell]);
 
@@ -651,9 +641,9 @@ export default function BasePage() {
         const fallbackTable =
           updatedBase.tables.find((t) => t.id !== tableIdToDelete) ?? updatedBase.tables[0];
 
-        set({ activeTableId: fallbackTable?.id ?? null });
+        void set({ activeTableId: fallbackTable?.id ?? null });
       } else {
-        set({ activeTableId: null });
+        void set({ activeTableId: null });
       }
     } catch (err) {
       if (!isCancelledError(err)) {
@@ -780,7 +770,7 @@ export default function BasePage() {
     });
   }, [columnVisibility, set, updateColumnVisibility]);
 
-  const handleFilteredDataChange = useCallback((data: RowData[] | null) => {
+  const handleFilteredDataChange = useCallback((data: BackendRow[] | null) => {
     set({filteredData: data});
   }, [set]);
 
@@ -933,7 +923,7 @@ export default function BasePage() {
 
           <div className="flex items-center gap-1">
             <div className="text-[18px] font-semibold text-gray-800 whitespace-nowrap">
-              {isLoading ? "Loading..." : baseName || "Untitled Base"}
+              {isLoading ? "Loading..." : baseName ?? "Untitled Base"}
             </div>
             <ChevronDown className="w-4 h-4 text-gray-800" />
           </div>
@@ -1056,9 +1046,9 @@ export default function BasePage() {
           onSearchChange={handleSearchChange} 
           searchResult={searchResults}
           onToggleColumnVisibility={handleToggleColumnVisibility}
-          columns={tableData?.columns || []}
+          columns={tableData?.columns ?? []}
           columnVisibility={columnVisibility}
-          tableId={tableData?.id || ""}
+          tableId={tableData?.id ?? ""}
           onFilteredDataChange={handleFilteredDataChange}
           sortRules={sortRules}
           setSortRules={(rules) => set({ sortRules: rules })}

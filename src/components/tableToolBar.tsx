@@ -19,6 +19,7 @@ import { useDebounce } from "use-debounce";
 import { useAuth } from "@clerk/nextjs"; 
 import { api } from "~/utils/api";
 import { toast } from "react-toastify";
+import type { BackendRow } from "~/types/row";
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -42,30 +43,19 @@ interface Column {
   visible: boolean;
 }
 
-interface CellData {
-  id: string;
-  value: string | null;
-  rowId: string;
-  columnId: string;
-}
-
-type RowDataType = Record<string, unknown> & {
-  id: string;
-}
-
 interface Props {
   onSearchChange?: (value: string) => void;
   searchResult?: { totalMatches: number };
   onToggleColumnVisibility: (columnId: string) => void;
   columns: Column[];
   columnVisibility: Record<string, boolean>;
-  onFilteredDataChange: (filteredData: RowDataType[] | null) => void;
+  onFilteredDataChange: (filteredData: BackendRow[] | null) => void;
   sortRules: SortRule[];
   setSortRules: (rules: SortRule[]) => void;
   onApplySort: (rules: SortRule[]) => void;
   tableId: string;
   onDataRefresh?: () => void; // Data refresh
-  onRowsAppended?: (newRows: RowDataType[]) => void;
+  onRowsAppended?: (newRows: BackendRow[]) => void;
 }
 
 interface CreationProgress {

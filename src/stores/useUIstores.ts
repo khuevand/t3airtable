@@ -5,6 +5,16 @@ type SortRule = {
   direction: "asc" | "desc";
 };
 
+interface RowData {
+  id: string;
+  cells: {
+    id: string;
+    columnId: string;
+    rowId: string;
+    value: string | number | boolean | null;
+  }[];
+}
+
 interface ColumnContextMenu {
   columnId: string;
   columnName: string;
@@ -32,9 +42,9 @@ interface UIState {
 
   // Visibility & Filters
   columnVisibility: Record<string, boolean>;
-  filteredData: any[] | null;
+  filteredData: RowData[] | null;
   sortRules: SortRule[];
-  sortedData: any[] | null;
+  sortedData: RowData[] | null;
   
   hovered: boolean;
   userProfile: boolean;
