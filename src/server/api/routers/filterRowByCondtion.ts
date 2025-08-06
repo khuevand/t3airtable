@@ -1,7 +1,7 @@
 // server/api/helpers/filterRowByCondition.ts
 import { z } from "zod";
 import { createTRPCRouter, privateProcedure } from "~/server/api/trpc";
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 export const filterRouter = createTRPCRouter({
   getFilteredRecords: privateProcedure

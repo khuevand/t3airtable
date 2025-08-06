@@ -1,9 +1,7 @@
 import { type AppType } from "next/app";
-import { Geist } from "next/font/google";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { api } from "~/utils/api";
-
 import "~/styles/globals.css";
 import {
   ClerkProvider,

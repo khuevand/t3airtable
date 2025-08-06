@@ -11,7 +11,7 @@ export const syncClerkUserToDatabase = async (clerkUserId: string) => {
   if (userExists) return userExists;
 
   const clerkUser = await (await clerkClient()).users.getUser(clerkUserId);
-  const name = clerkUser.username || clerkUser.firstName || "unknown";
+  const name = clerkUser.username ?? clerkUser.firstName ?? "unknown";
   const email = clerkUser.emailAddresses[0]?.emailAddress ?? "";
 
   const newUser = await prisma.user.create({

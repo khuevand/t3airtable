@@ -6,7 +6,7 @@ import {
   getCoreRowModel,
   flexRender,
 } from "@tanstack/react-table";
-import type { CellContext, ColumnDef } from "@tanstack/react-table";
+import type { CellContext } from "@tanstack/react-table";
 import { isCancelledError } from "@tanstack/react-query";
 import {ChevronDown,
         CheckSquare,
@@ -33,19 +33,6 @@ import { useUIStore } from "~/stores/useUIstores";
 // TYPE DEFINITIONS AND COLOR PICK
 // ========================================================================================
 
-interface Column {
-  id: string;
-  name: string;
-  type: string;
-  order: number;
-  visible: boolean;
-}
-
-interface Row {
-  id: string;
-  cells: Cell[];
-}
-
 interface Table {
   id: string;
   name: string;
@@ -68,11 +55,6 @@ interface EditableCellProps {
   columnId: string;
   searchTerm?: string;
 }
-
-type SortRule = {
-  columnId: string;
-  direction: "asc" | "desc";
-};
 
 // ========================================================================================
 // EDITABLE CELL COMPONENT
@@ -446,7 +428,7 @@ export default function BasePage() {
         header: col.name,
         cell: (props: CellContext<RowData, unknown>) => (
           <EditableCell
-            initialValue={String(props.getValue() ?? "")}
+            initialValue={String(props.getValue() || "")}
             tableId={activeTableId}
             rowId={props.row.id}
             columnId={props.column.id}

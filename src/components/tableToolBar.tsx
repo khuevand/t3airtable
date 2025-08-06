@@ -49,12 +49,6 @@ interface CellData {
   columnId: string;
 }
 
-interface TableData {
-  id: string;
-  tableId: string;
-  cells: CellData[];
-}
-
 type RowDataType = Record<string, unknown> & {
   id: string;
 }
@@ -261,7 +255,7 @@ export default function TableToolbar({
       console.error('Error in batch creation:', error);
       setCreationProgress({ isCreating: false, created: 0, batchNumber: 0 });
     }
-  }, [isLoaded, isSignedIn, creationProgress.isCreating, tableId, onDataRefresh, createRowsBatchMutation]);
+  }, [isLoaded, isSignedIn, creationProgress.isCreating, tableId, createRowsBatchMutation]);
 
   const handleAddFilter = () => {
     if (!selectedColumn) return;
