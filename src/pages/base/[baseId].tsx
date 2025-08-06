@@ -168,7 +168,6 @@ export default function BasePage() {
   const selectedRows = useUIStore((state) => state.selectedRows);
   const selectedColIndex = useUIStore((state) => state.selectedColIndex);
   const allSelected = useUIStore((state) => state.allSelected);
-  const activeCell = useUIStore((state) => state.activeCell);
 
   // Column operations state
   const isAddingColumn = useUIStore((state) => state.isAddingColumn);
@@ -421,7 +420,10 @@ export default function BasePage() {
         header: col.name,
         cell: (props: CellContext<FlattenedRow, unknown>) => (
           <EditableCell
-            initialValue={String(props.getValue() ?? "")}
+            initialValue={(() => {
+              const value = props.getValue();
+              return value == null ? "" : String(value);
+            })()}
             tableId={activeTableId}
             rowId={props.row.id}
             columnId={props.column.id}

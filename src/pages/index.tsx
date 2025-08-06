@@ -40,10 +40,6 @@ export default function Home() {
         <title>t3Airtable</title>
         <meta name="description" content="Airtable clone with T3 stack" />
         <link rel="icon" href="/favicon.ico" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
       </Head>
 
       <main className="min-h-screen bg-white text-black">
