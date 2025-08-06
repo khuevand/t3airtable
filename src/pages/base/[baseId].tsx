@@ -420,15 +420,18 @@ export default function BasePage() {
         header: col.name,
         cell: (props: CellContext<FlattenedRow, unknown>) => (
           <EditableCell
-            initialValue={(() => {
-              const value = props.getValue();
-              return value == null ? "" : String(value);
-            })()}
-            tableId={activeTableId}
-            rowId={props.row.id}
-            columnId={props.column.id}
-            searchTerm={debouncedSearchTerm}
-          />
+          initialValue={(() => {
+            const value = props.getValue();
+            if (value == null) return "";
+            if (typeof value === 'string') return value;
+            if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+            return "";
+          })()}
+          tableId={activeTableId}
+          rowId={props.row.id}
+          columnId={props.column.id}
+          searchTerm={debouncedSearchTerm}
+        />
         ),
       }));
   }, [tableData, activeTableId, debouncedSearchTerm, columnVisibility]);
@@ -1346,7 +1349,11 @@ export default function BasePage() {
                                             <button
                                               onClick={() => {
                                                 const newSet = new Set(selectedRows);
-                                                newSet.has(row.id) ? newSet.delete(row.id) : newSet.add(row.id);
+                                                if (newSet.has(row.id)) {
+                                                  newSet.delete(row.id);
+                                                } else {
+                                                  newSet.add(row.id);
+                                                }
                                                 set({selectedRows: newSet});
                                                 set({allSelected: newSet.size === table.getRowModel().rows.length});
                                               }}
