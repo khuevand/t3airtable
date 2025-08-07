@@ -28,7 +28,7 @@ import type { BackendRow } from "~/types/row";
 interface SortRule {
   columnId: string;
   direction: "asc" | "desc";
-  logicalOperator?: "AND" | "OR"; // Optional because first rule doesn't need one
+  logicalOperator?: "AND" | "OR";
 }
 
 interface FilterCondition {
@@ -104,27 +104,27 @@ export default function TableToolbar({
   // STATE MANAGEMENT
   // ============================================================================
 
-  // Hide state
+  // Hide
   const isAnyColumnHidden = Object.values(columnVisibility).some((visible) => !visible);
 
-  // Search state
+  // Search 
   const [inputValue, setInputValue] = useState("");
   const [debounced] = useDebounce(inputValue, 300);
   
-  // UI state
+  // UI 
   const [showSearchBox, setShowSearchBox] = useState(false);
   const [showHideFields, setShowHideFields] = useState(false);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   
-  // Filter state
+  // Filter 
   const [filters, setFilters] = useState<FilterCondition[]>([]);
   const [logicalOperator, setLogicalOperator] = useState<'AND' | 'OR'>('AND');
   const [selectedColumn, setSelectedColumn] = useState("");
   const [selectedOperator, setSelectedOperator] = useState("contains");
   const [filterValue, setFilterValue] = useState("");
   
-  // Row creation state - simplified for 15k rows only
+  // 15k rows 
   const [creationProgress, setCreationProgress] = useState<CreationProgress>({
     isCreating: false,
     created: 0,
@@ -151,7 +151,6 @@ export default function TableToolbar({
     }
   });
 
-  // Optimized batch row creation mutation for 15k rows
   const createRowsBatchMutation = api.row.createManyRowsBatch.useMutation({
     onSuccess: (variables) => {
       const { batchNumber, totalBatches } = variables;
@@ -196,7 +195,6 @@ export default function TableToolbar({
   // EVENT HANDLERS
   // ============================================================================
 
-  // Simplified row creation for 15k rows with batching
   const handleCreateRows = useCallback(async () => {
     if (!isLoaded) {
       toast.error('Authentication still loading...');
@@ -236,7 +234,7 @@ export default function TableToolbar({
           totalBatches,
         });
 
-        // Small delay between batches
+        // delay between batches
         if (i < totalBatches) {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
@@ -315,7 +313,8 @@ export default function TableToolbar({
     setSortRules([...sortRules, { 
       columnId: "", 
       direction: "asc",
-      logicalOperator: "AND" // Default to AND for new rules
+      // Default sort to AND for new rules
+      logicalOperator: "AND"
     }]);
   };
 
@@ -374,10 +373,9 @@ export default function TableToolbar({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Initialize sortRules if empty when component mounts
   useEffect(() => {
     if (sortRules.length === 0) {
-      setSortRules([{ columnId: "", direction: "asc" }]); // First rule doesn't need logicalOperator
+      setSortRules([{ columnId: "", direction: "asc" }]);
     }
   }, [setSortRules, sortRules.length]);
 
@@ -627,7 +625,6 @@ export default function TableToolbar({
               </div>
             )}
 
-            {/* Sort rule configuration */}
             <div className="flex gap-2 items-center">
               {index === 0 && (
                 <span className="text-xs text-gray-500 font-medium min-w-fit">Sort by:</span>

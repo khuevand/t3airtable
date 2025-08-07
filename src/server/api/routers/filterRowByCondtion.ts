@@ -1,4 +1,3 @@
-// server/api/helpers/filterRowByCondition.ts
 import { z } from "zod";
 import { createTRPCRouter, privateProcedure } from "~/server/api/trpc";
 import type { Prisma } from "@prisma/client";
@@ -15,7 +14,6 @@ export const filterRouter = createTRPCRouter({
             value: z.string(),
           })
         ),
-        // Add logical operator for combining filters
         logicalOperator: z.enum(['AND', 'OR']).default('AND'),
       })
     )
@@ -23,7 +21,6 @@ export const filterRouter = createTRPCRouter({
       const { filters, tableId, logicalOperator } = input;
 
       if (filters.length === 0) {
-        // If no filters, return all rows for the table
         const rows = await ctx.db.row.findMany({
           where: {
             tableId: tableId,
@@ -35,7 +32,6 @@ export const filterRouter = createTRPCRouter({
         return rows;
       }
 
-      // Helper function to build filter conditions
       const buildFilterCondition = (columnId: string, operator: string, value: string) => {
         switch (operator) {
           case "contains":
@@ -104,7 +100,6 @@ export const filterRouter = createTRPCRouter({
           case "is empty":
             return {
               OR: [
-                // Row has no cell for this column
                 {
                   cells: {
                     none: {
@@ -112,7 +107,6 @@ export const filterRouter = createTRPCRouter({
                     },
                   },
                 },
-                // Row has cell for this column but value is null or empty
                 {
                   cells: {
                     some: {
@@ -149,16 +143,15 @@ export const filterRouter = createTRPCRouter({
             } as Prisma.RowWhereInput;
 
           default:
-            // Return a condition that matches all rows (effectively no filter)
+            // Return a condition that matches all rows
             return {} as Prisma.RowWhereInput;
         }
       };
 
-      // Build the where clause with support for AND/OR logic
+      // navigate the clause
       let whereClause: Prisma.RowWhereInput;
 
       if (filters.length > 1) {
-        // Handle multiple filters with specified logical operator
         const filterConditions = filters
           .map((filter) => ({
             tableId: tableId,
@@ -171,7 +164,6 @@ export const filterRouter = createTRPCRouter({
         };
 
       } else {
-        // Handle single filter
         const filter = filters[0]!;
         const filterCondition = buildFilterCondition(filter.columnId, filter.operator, filter.value);
         

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createTRPCRouter, privateProcedure } from "~/server/api/trpc";
 
 export const columnRouter = createTRPCRouter({
-    addColumn: privateProcedure
+  addColumn: privateProcedure
     .input(
         z.object({
             tableId: z.string(),
@@ -12,13 +12,11 @@ export const columnRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
     const { tableId, name, type } = input;
-
-    // 1. Count existing columns for proper `order`
+    // get total columns to organize them in order
     const columnCount = await ctx.db.column.count({
         where: { tableId },
     });
 
-    // 2. Create the new column
     const newColumn = await ctx.db.column.create({
         data: {
         tableId,
@@ -29,18 +27,16 @@ export const columnRouter = createTRPCRouter({
         },
     });
 
-    // 3. Find all existing rows in the table
     const rows = await ctx.db.row.findMany({
       where: { tableId },
       select: { id: true },
     });
 
-    // 4. Create blank cells for each row with the new column
     await ctx.db.cell.createMany({
       data: rows.map((row) => ({
         rowId: row.id,
         columnId: newColumn.id,
-        value: "", // initialize with blank string
+        value: "", 
       })),
     });
 
@@ -52,13 +48,11 @@ export const columnRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
         const { columnId } = input;
 
-        // check if column exists
         const existing = await ctx.db.column.findUnique({
         where: { id: columnId },
     });
     if (!existing) throw new Error("Column not found");
 
-    // Prisma schema handles cascading delete of cells
     await ctx.db.column.delete({
         where: { id: columnId },
     });

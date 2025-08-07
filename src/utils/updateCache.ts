@@ -1,6 +1,7 @@
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "~/server/api/root";
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
+// ignore the error on vercel
 import { api } from "~/utils/api";
 
 type RouterOutput = inferRouterOutputs<AppRouter>;

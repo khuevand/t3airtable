@@ -1,4 +1,4 @@
-// Raw row from backend (used in Zustand, API)
+// Raw row for Zustand and API
 export interface BackendRow {
   id: string;
   cells: {

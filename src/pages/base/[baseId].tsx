@@ -134,7 +134,7 @@ const EditableCell: React.FC<EditableCellProps> = ({
 
 export default function BasePage() {
   // ========================================================================================
-  // HOOKS & REFS - Move all hooks to the top
+  // HOOKS & REFS
   // ========================================================================================
   
   const { user } = useUser();
@@ -142,7 +142,6 @@ export default function BasePage() {
   const params = useParams();
   const { isLoaded, isSignedIn } = useUser();
 
-  // Early returns should come after all hooks
   const baseId = params?.baseId as string;
 
   // Refs
@@ -157,29 +156,29 @@ export default function BasePage() {
   // STATE MANAGEMENT
   // ========================================================================================
   
-  // Side bar state
+  // Side bar
   const hovered = useUIStore((state) => state.hovered);
 
-  // Table state
+  // Table
   const activeTableId = useUIStore((state) => state.activeTableId);
   const openDropdownId = useUIStore((state) => state.openDropdownId);
 
-  // Selection state
+  // Selection
   const selectedRows = useUIStore((state) => state.selectedRows);
   const selectedColIndex = useUIStore((state) => state.selectedColIndex);
   const allSelected = useUIStore((state) => state.allSelected);
 
-  // Column operations state
+  // Column operations
   const isAddingColumn = useUIStore((state) => state.isAddingColumn);
   const newColumnName = useUIStore((state) => state.newColumnName);
   const newColumnType = useUIStore((state) => state.newColumnType);
   const editColumnName = useUIStore((state) => state.editColumnName);
   const contextRow = useUIStore((state) => state.contextRow);
 
-  // Visibility state
+  // Visibility
   const columnVisibility = useUIStore((state) => state.columnVisibility);
 
-  // Filter & sort state
+  // Filter & sort 
   const filteredData = useUIStore((state) => state.filteredData);
   const sortRules = useUIStore((state) => state.sortRules);
   const sortedData = useUIStore((state) => state.sortedData);
@@ -190,7 +189,7 @@ export default function BasePage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm] = useDebounce(searchTerm, 200);
 
-  // Setter (unified setter from the store)
+  // Setter
   const set = useUIStore((state) => state.set);
 
   // ========================================================================================
@@ -409,7 +408,7 @@ export default function BasePage() {
   // COMPUTED VALUES - Move before useEffect hooks
   // ========================================================================================
   
-  // Table columns definition
+  // Columns definition
   const memorizedColumns = useMemo(() => {
     if (!tableData || !activeTableId) return [];
 
@@ -436,7 +435,7 @@ export default function BasePage() {
       }));
   }, [tableData, activeTableId, debouncedSearchTerm, columnVisibility]);
 
-  // different combinations of filtering and sorting
+  // Different combinations of filtering and sorting
   const finalRows = useMemo<BackendRow[]>(() => {
     if (!filteredData && !sortedData) return tableData?.rows ?? [];
     if (filteredData && !sortedData) return filteredData;
@@ -470,14 +469,12 @@ export default function BasePage() {
     let totalMatches = 0;
     const searchLower = debouncedSearchTerm.toLowerCase();
 
-    // Count matches in column headers
     tableData.columns.forEach(column => {
       if (column.name.toLowerCase().includes(searchLower)) {
         totalMatches++;
       }
     });
 
-    // Count matches in all cells
     tableData.rows.forEach(row => {
       row.cells.forEach(cell => {
         const cellValue = String(cell.value ?? '').toLowerCase();
@@ -547,7 +544,7 @@ export default function BasePage() {
     set({ sortedData: null });
   }, [activeTableId, set]);
 
-  // Click outside handler
+  // Click outside handler - resetting
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (tableRef.current && !tableRef.current.contains(e.target as Node)) {
@@ -576,7 +573,7 @@ export default function BasePage() {
     };
   }, []);
 
-  // Add this useEffect to handle infinite scrolling
+  // Infinite scrolling handler
   useEffect(() => {
     const virtualItems = rowVirtualizer.getVirtualItems();
     const [lastItem] = virtualItems.slice(-1);
@@ -840,13 +837,11 @@ export default function BasePage() {
           )}
         </div>
 
-        {/* Bottom: K Profile */}
+        {/* Bottom: User Profile */}
         <div className="absolute bottom-4 left-4 flex flex-col items-center space-y-6 z-50">
-          {/* Top icons */}
           <Info className="w-4 h-4 text-gray-600 hover:text-black cursor-pointer" />
           <Bell className="w-4 h-4 text-gray-600 hover:text-black cursor-pointer" />
 
-          {/* Profile button */}
           <button onClick={toggleUserMenu}>
             {user?.imageUrl ? (
               <Image
@@ -863,7 +858,6 @@ export default function BasePage() {
             )}
           </button>
 
-          {/* Side dropdown menu */}
           {userProfile && (
             <div className="absolute left-12 bottom-0 w-64 bg-white shadow-xl border border-gray-200 rounded-md font-sans text-sm text-gray-800 z-50">
               <div className="px-4 py-3 border-b">
@@ -902,9 +896,7 @@ export default function BasePage() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col">
-        {/* Header - spans full width of main content */}
       <header className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200">
-        {/* Left: Logo + Base name dropdown */}
         <div className="flex items-center gap-2 min-w-[220px]">
           <div
             className="w-8 h-8 rounded-md flex items-center justify-center"
@@ -927,7 +919,6 @@ export default function BasePage() {
           </div>
         </div>
 
-        {/* Center: Navigation links */}
         <nav className="flex items-center gap-3 text-sm text-gray-600">
           <a
             href="#"
@@ -944,7 +935,6 @@ export default function BasePage() {
           <a href="#" className="hover:text-black">Forms</a>
         </nav>
 
-        {/* Right: Controls */}
         <div className="flex items-center gap-3 text-xs whitespace-nowrap">
           <History className="w-4 h-4 text-gray-700"/>
           <span className="bg-[#f2f2f2] text-[13px] text-gray-800 px-3 py-2 rounded-full">
@@ -988,7 +978,7 @@ export default function BasePage() {
                 />
               </div>
 
-              {/* Dropdown menu */}
+              {/* Table choice dropdown menu */}
               {openDropdownId === table.id && (
                 <div
                   className="absolute z-50 top-full mt-1 left-0 w-56 bg-white border border-gray-200 shadow-lg rounded-md p-1"
@@ -1074,7 +1064,7 @@ export default function BasePage() {
 
         {/* Main Content with Sidebar and Table */}
         <div className="flex flex-1 overflow-hidden">
-          {/* LEFT Sidebar with View Controls */}
+          {/* left Sidebar*/}
           <aside className="w-70 bg-white border-r border-gray-200 p-3 flex flex-col gap-3 text-sm text-[13px]">
             <div className="px-3 py-2 rounded flex items-center gap-2 ">
               <Plus className="w-4 h-4 text-gray-700"/>
@@ -1112,7 +1102,7 @@ export default function BasePage() {
                   className="flex-1 bg-white"
                 >
                   <table className="min-w-full border border-gray-300 bg-white table-fixed">
-                    {/* Fixed Header */}
+                    {/* Header */}
                     <thead className="bg-white sticky top-0 z-10">
                       {table.getHeaderGroups().map((headerGroup) => (
                         <tr key={headerGroup.id}>
@@ -1216,7 +1206,7 @@ export default function BasePage() {
                               )}
                             </th>
                           ))}
-                          {/* "+" Button column ONLY in header */}
+                          {/* + for adding column */}
                           <th className="border-b border-gray-300 px-2 py-1 text-sm text-blue-500 text-left relative" style={{ width: '60px' }}>
                             {isAddingColumn ? (
                               <div className="absolute z-20 bg-white shadow-md border rounded p-2 w-48 right-0 top-full mt-1">
@@ -1345,7 +1335,6 @@ export default function BasePage() {
                                       >
                                         {index === 0 ? (
                                           <div className="flex items-center gap-2 text-gray-700">
-                                            {/* Checkbox */}
                                             <button
                                               onClick={() => {
                                                 const newSet = new Set(selectedRows);
@@ -1399,7 +1388,6 @@ export default function BasePage() {
                                         )}
                                       </div>
                                     ))}
-                                    {/* Empty cell for the "+" column */}
                                     <div 
                                       className="border-t border-gray-200 px-2 py-1 text-sm"
                                       style={{ 
@@ -1423,7 +1411,7 @@ export default function BasePage() {
                     </div>
                   )}
                   
-                  {/* Add Row Button - positioned at the bottom, only show when no filter is applied */}
+                  {/* Add Row Button */}
                   {filteredData === null && (
                     <div 
                       onClick={handleAddRow}

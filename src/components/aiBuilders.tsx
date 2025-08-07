@@ -1,4 +1,3 @@
-// components/AiBuilderBox.tsx
 import { Sparkles, Shuffle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -21,16 +20,12 @@ export default function AiBuilderBox() {
 
   return (
     <div className="relative flex items-center justify-center bg-[#f6f9f5] py-15 overflow-hidden">
-      {/* Background dots */}
-      <div className="absolute inset-0 z-0 animated-dots-bg" />
-        {/* White Card */}
+      {/* Background: dots and white card */}
         <div className="relative z-10 w-full max-w-3xl rounded-2xl bg-white p-7 shadow-xl flex flex-col justify-between min-h-[190px]">
-          {/* Suggestion Text */}
           <p className="text-[20px] font-base text-slate-800 min-h-[60px] transition-all text-left">
             {suggestions[index]}
           </p>
 
-          {/* Button Group at the bottom */}
           <div className="mt-11 flex justify-between items-center">
             <button className="flex items-center gap-2 rounded-full border border-gray-300 px-6 py-3 text-base font-semibold hover:bg-slate-50">
               <Shuffle className="" /> New Suggestion

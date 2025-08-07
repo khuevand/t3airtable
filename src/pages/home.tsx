@@ -70,9 +70,6 @@ export default function HomeDashboard() {
   const [isOpen, setIsOpen] = useState(false);
   const [activeMenuBaseId, setActiveMenuBaseId] = useState<string | null>(null);
   const [confirmDeleteBaseId, setConfirmDeleteBaseId] = useState<string | null>(null);
-
-
-  // Computed state
   const sidebarExpanded = isSidebarOpen || isHovered;
 
   // ===== CONSTANTS =====
@@ -145,7 +142,6 @@ export default function HomeDashboard() {
 
       {/* ===== NAVIGATION BAR ===== */}
       <section className="flex items-center justify-between px-4 py-2 border-b border-slate-200 w-full">
-        {/* Left - Sidebar toggle and logo */}
         <div className="flex items-center mr-2 gap-3 min-w-[200px]">
           <button
             onClick={() => setIsSidebarOpen((prev) => !prev)}
@@ -160,7 +156,6 @@ export default function HomeDashboard() {
           </Link>
         </div>
 
-        {/* Center - Search bar */}
         <div className="flex items-center w-full max-w-90 px-3 py-2 mr-16 border border-gray-200 shadow-sm rounded-full hover:shadow-md transition mx-6 cursor-pointer">
           <Search className="w-4 h-4 text-gray-800 mr-2" />
           <input
@@ -171,7 +166,6 @@ export default function HomeDashboard() {
           <span className="text-xs text-gray-400 ml-2">ctrl K</span>
         </div>
 
-        {/* Right - Help, Notifications, Avatar */}
         <div className="flex items-center gap-2">
           <button className="flex items-center gap-1 px-3 py-1 text-[13px] text-gray-600 hover:bg-gray-100 rounded-full">
             <HelpCircle className="w-4 h-4 text-gray-600" />
@@ -291,7 +285,6 @@ export default function HomeDashboard() {
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          {/* Top Navigation */}
           <div className="justify-between items-center flex flex-col gap-3 text-gray-700">
             <nav className="flex flex-col gap-6 w-full items-center mt-3 ml-2">
               <div className="flex items-center gap-4 text-sm cursor-pointer w-full">
@@ -317,7 +310,6 @@ export default function HomeDashboard() {
                 })}></div>
           </div>
 
-          {/* Bottom Navigation and Create Button */}
           <div className="mb-4">
             <div className="w-[95%] border-b border-gray-200 mt-1"></div>
             <nav className="flex flex-col gap-6 w-full items-center mt-3 ml-2">
@@ -373,7 +365,6 @@ export default function HomeDashboard() {
 
         {/* ===== MAIN CONTENT ===== */}
         <main className="flex-1 overflow-y-auto">
-          {/* Welcome Banner */}
           <section className="flex items-center justify-center py-2 bg-[#e6fce8]">
             <div className="flex items-center gap-1">
               <Link
@@ -393,7 +384,6 @@ export default function HomeDashboard() {
             </button>
           </section>
         
-          {/* Home Title and Quick Start Cards */}
           <div className="p-6">
             <div className="mb-6 ml-5 mt-2">
               <div className="text-[27px] font-bold text-gray-800 mb-1">Home</div>
@@ -455,9 +445,7 @@ export default function HomeDashboard() {
             </div>
           </div>
           
-          {/* Filter Section */}
           <section className="flex items-center justify-between px-6 pb-2">
-            {/* Dropdown (Opened anytime) */}
             <div className="relative inline-block text-left">
               <button
                 onClick={() => setIsFilterDropdownOpen((prev) => !prev)}
@@ -495,7 +483,6 @@ export default function HomeDashboard() {
               )}
             </div>
 
-            {/* Icon group (Right side) */}
             <div className="flex items-center gap-1">
               <button className="p-1 rounded-full" title="View items in list">
                 <AlignJustify className="w-5 h-5 text-gray-500 hover:text-gray-600 cursor-pointer" />
@@ -532,7 +519,6 @@ export default function HomeDashboard() {
                         className="flex items-center justify-between border border-gray-300 rounded-lg bg-white shadow-sm p-5 hover:shadow-md cursor-pointer"
                         onClick={() => router.push(`/base/${base.id}`)}
                       >
-                        {/* Left: Initials */}
                         <div
                           className="w-14 h-14 rounded-lg flex items-center justify-center text-white text-lg font-bold mr-3"
                           style={{ backgroundColor: stringToColor(base.id) }}
@@ -540,7 +526,6 @@ export default function HomeDashboard() {
                           {base.name.slice(0, 2).toUpperCase()}
                         </div>
 
-                        {/* Middle: Text */}
                         <div className="flex flex-col flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900 truncate">{base.name}</p>
                           <div className="relative h-5">
@@ -553,7 +538,6 @@ export default function HomeDashboard() {
                           </div>
                         </div>
 
-                        {/* Right: Menu button */}
                         <div className="relative z-20">
                           <button
                             className="p-1 rounded hover:bg-gray-100"
@@ -565,7 +549,6 @@ export default function HomeDashboard() {
                             <Ellipsis className="w-4 h-4" />
                           </button>
 
-                          {/* Dropdown menu */}
                           {activeMenuBaseId === base.id && (
                             <div className="absolute right-0 mt-2 w-28 bg-white border border-gray-200 rounded-md shadow-lg z-30">
                               <button
@@ -584,7 +567,6 @@ export default function HomeDashboard() {
                         </div>
                       </div>
 
-                      {/* Confirmation modal */}
                       {confirmDeleteBaseId === base.id && (
                         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
                           <div className="bg-white p-6 rounded shadow-lg z-50 w-[300px]">
@@ -614,7 +596,6 @@ export default function HomeDashboard() {
             )}
           </section>
 
-          {/* Loading Overlay */}
           {isCreating && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
               <div className="flex items-center gap-2">

@@ -22,7 +22,7 @@ interface ColumnContextMenu {
 }
 
 interface UIState {
-  // Table & View
+  // Table and View
   activeTableId: string | null;
   openDropdownId: string | null;
 
@@ -32,7 +32,7 @@ interface UIState {
   allSelected: boolean;
   activeCell: { row: number; col: number } | null;
 
-  // Column ops
+  // Column 
   isAddingColumn: boolean;
   newColumnName: string;
   newColumnType: string;
@@ -40,7 +40,7 @@ interface UIState {
   contextRow: string | null;
   columnContextMenu: ColumnContextMenu | null;
 
-  // Visibility & Filters
+  // Visibility and Filters
   columnVisibility: Record<string, boolean>;
   filteredData: RowData[] | null;
   sortRules: SortRule[];
@@ -57,7 +57,6 @@ interface UIState {
 }
 
 export const useUIStore = create<UIState>((set) => ({
-  // Default values
   activeTableId: null,
   openDropdownId: null,
   selectedRows: new Set(),

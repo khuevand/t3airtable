@@ -29,7 +29,7 @@
 
     return {
       db,
-      currentUser: user, // ✅ Now a full Clerk User object
+      currentUser: user,
     };
   };
 

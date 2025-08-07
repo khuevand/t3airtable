@@ -17,21 +17,22 @@
     -webkit-mask-image: radial-gradient(ellipse at center, black 0%, transparent 80%);
   }
 
+   /* color shift for outer page */
   @keyframes colorShift {
     0% {
-      color: rgb(255, 99, 132); /* red-ish */
+      color: rgb(255, 99, 132);
     }
     25% {
-      color: rgb(54, 162, 235); /* blue-ish */
+      color: rgb(54, 162, 235);
     }
     50% {
-      color: rgb(75, 192, 192); /* teal-ish */
+      color: rgb(75, 192, 192);
     }
     75% {
-      color: rgb(153, 102, 255); /* purple-ish */
+      color: rgb(153, 102, 255); 
     }
     100% {
-      color: rgb(255, 99, 132); /* back to red */
+      color: rgb(255, 99, 132);
     }
   }
 }

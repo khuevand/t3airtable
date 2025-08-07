@@ -43,7 +43,6 @@ export default function Home() {
       </Head>
 
       <main className="min-h-screen bg-white text-black">
-        {/* Header */}
         <header className="flex items-center justify-center px-10 py-2 bg-[#f6f9ff] border-b border-slate-100">
           <div className="flex items-center gap-2">
             <p className="text-base text-slate-800">
@@ -64,7 +63,6 @@ export default function Home() {
               <div className="text-2xl font-bold text-gray-800">Airtable</div>
             </Link>
 
-            {/* Navigation Links */}
             <nav className="hidden md:flex items-center gap-5 text-lg font-semibold text-gray-900">
               <Link href="#" className="flex items-center gap-1 hover:text-blue-800 cursor-pointer">
                 <span>Platform</span>
@@ -117,7 +115,6 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Hero Section */}
         <section className="text-center py-20 bg-[#f9f9f5] font-sans">
           {isLoading ? (
             <div className="absolute inset-0 bg-white flex justify-center items-center z-10">
@@ -156,7 +153,6 @@ export default function Home() {
             </div>
           </div>
         </section>
-        {/* Optional: Add feature highlights or footer here */}
       </main>
     </>
   );
