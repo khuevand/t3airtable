@@ -497,7 +497,7 @@ export default function HomeDashboard() {
           <section className="flex flex-col items-center justify-center min-h-[300px] text-sm text-gray-500">
             {!isUserLoaded || isBasesLoading ? (
               <div className="flex items-center justify-center py-10">
-                <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-pink-500 border-opacity-75 mr-2" />
+                <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-gray-800 border-opacity-75 mr-2" />
                 <span className="text-sm text-gray-600">Loading your bases...</span>
               </div>
             ) : bases.length === 0 ? (
