@@ -39,17 +39,19 @@ interface UIState {
   editColumnName: string;
   contextRow: string | null;
   columnContextMenu: ColumnContextMenu | null;
-
-  // Visibility and Filters
   columnVisibility: Record<string, boolean>;
+
+  // Search
+  searchTerm: string;
+
+  // Backend Filter & Sort Results
   filteredData: RowData[] | null;
-  sortRules: SortRule[];
   sortedData: RowData[] | null;
+  sortRules: SortRule[] | null;
   
+  // UI State
   hovered: boolean;
   userProfile: boolean;
-
-  // Editable Cell
   isFocused: boolean;
 
   // Setters
@@ -70,9 +72,10 @@ export const useUIStore = create<UIState>((set) => ({
   contextRow: null,
   columnContextMenu: null,
   columnVisibility: {},
+  searchTerm: "",
   filteredData: null,
-  sortRules: [],
   sortedData: null,
+  sortRules: null,
   hovered: false,
   userProfile: false,
   isFocused: false,

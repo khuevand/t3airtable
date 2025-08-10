@@ -32,6 +32,8 @@ import type { BackendRow, FlattenedRow } from "~/types/row";
 import EditableCell from "~/components/editableCells";
 import HeaderLayout from "~/components/headerLayout";
 import TableTabs from "~/components/tableTabs";
+import { useCreateManyRows } from "~/hooks/create15KRows";
+import { useTableOperations } from "~/hooks/tableToolBarOperation";
 
 // ========================================================================================
 // TYPE DEFINITIONS
@@ -49,20 +51,6 @@ interface TempColumn {
   order: number;
   tableId: string;
   visible: boolean;
-  createdAt?: Date;
-  updatedAt?: Date;
-}
-
-interface TempCell {
-  id: string;
-  columnId: string;
-  value: string | number;
-  rowId: string;
-}
-
-interface TempRow {
-  id: string;
-  cells: TempCell[];
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -85,12 +73,10 @@ export default function BasePage() {
 
   const baseId = params?.baseId as string;
 
-  // Refs
   const tableRef = useRef<HTMLDivElement>(null);
   const isColumnOperationRef = useRef(false);
   const tableContainerRef = useRef<HTMLDivElement>(null);
   
-  // API utils
   const utils = api.useUtils();
 
   // ========================================================================================
@@ -116,19 +102,12 @@ export default function BasePage() {
   const editColumnName = useUIStore((state) => state.editColumnName);
   const contextRow = useUIStore((state) => state.contextRow);
 
-  // Visibility
-  const columnVisibility = useUIStore((state) => state.columnVisibility);
-
   // Filter & sort 
-  const filteredData = useUIStore((state) => state.filteredData);
-  const sortRules = useUIStore((state) => state.sortRules);
-  const sortedData = useUIStore((state) => state.sortedData);
+  const filteredData = useUIStore(s => s.filteredData);
+  const sortedData   = useUIStore(s => s.sortedData);
 
   // Access user account
   const userProfile = useUIStore((state) => state.userProfile);
-
-  const [searchTerm, setSearchTerm] = useState("");
-  const [debouncedSearchTerm] = useDebounce(searchTerm, 200);
 
   // Setter
   const set = useUIStore((state) => state.set);
@@ -159,10 +138,6 @@ export default function BasePage() {
   }, []);
 
   const lighterColor = useMemo(() => stringToColor(baseId ?? '', 90), [stringToColor, baseId]);
-
-  const isColumnSorted = useCallback((columnId: string): boolean => {
-    return sortRules.some(rule => rule.columnId === columnId);
-  }, [sortRules]);
 
   // ========================================================================================
   // API QUERIES
@@ -213,6 +188,20 @@ export default function BasePage() {
   const { data: baseName, isLoading } = api.base.getBaseName.useQuery({
     baseId: baseId ?? '',
   }, { enabled: !!baseId });
+
+   // Add the centralized table operations
+  const {
+    operations: tableOperations,
+    initializeColumnVisibility
+  } = useTableOperations({
+    tableId: activeTableId ?? "",
+    baseId: baseId ?? "",
+    columns: tableData?.columns ?? []
+  });
+
+  const sortedColumnIds = useMemo(() => {
+    return new Set((tableOperations.sortRules ?? []).map(r => r.columnId).filter(Boolean));
+  }, [tableOperations.sortRules]);
 
   // ========================================================================================
   // OPTIMISTIC MUTATION HELPER
@@ -537,86 +526,27 @@ export default function BasePage() {
     },
   });
 
-  const sortRecordsMutation = api.sort.getSortedRecords.useMutation({
-    onSuccess: (data: BackendRow[]) => {
-      console.log("Sorted rows returned:", data);
-      set({ sortedData: data });
-    },
-    onError: (err) => {
-      console.error("Sort error:", err);
-      set({ sortedData: null });
-    },
-  });
+  // const sortRecordsMutation = api.sort.getSortedRecords.useMutation({
+  //   onSuccess: (data: BackendRow[]) => {
+  //     console.log("Sorted rows returned:", data);
+  //     set({ sortedData: data });
+  //   },
+  //   onError: (err) => {
+  //     console.error("Sort error:", err);
+  //     set({ sortedData: null });
+  //   },
+  // });
 
-  const createManyRows = api.row.createManyRowsBatch.useMutation({
-    async onMutate({ tableId, count }) {
-      if (!baseId) return;
-      
-      const key = { baseId, tableId };
-      await utils.table.getTableById.cancel(key);
-      const prev = utils.table.getTableById.getInfiniteData(key);
-
-      // Create temporary rows with cells for all columns
-      const tempRows = Array.from({ length: count }).map((_, index) => ({
-        id: `temp-batch-row-${Date.now()}-${index}`,
-        cells: tableData?.columns.map(col => ({
-          id: `temp-batch-cell-${Date.now()}-${index}-${col.id}`,
-          columnId: col.id,
-          value: col.type === 'number' ? 0 : '',
-          rowId: `temp-batch-row-${Date.now()}-${index}`,
-        })) || [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }));
-
-      editInfiniteTable(key, (data) => {
-        data.pages = [];
-        data.pageParams = [];
-      });
-
-      // Scroll to top immediately for better UX
-      if (tableContainerRef.current) {
-        tableContainerRef.current.scrollTop = 0;
-      }
-
-      return { prev, key, tempRowIds: tempRows.map(r => r.id) };
-    },
-    onError(error, _vars, ctx) {
-      console.error("Bulk row creation error:", error);
-      
-      // Revert optimistic update
-      if (ctx?.prev) {
-        utils.table.getTableById.setInfiniteData(ctx.key, ctx.prev);
-      }
-      
-      toast.error("Failed to create rows in batch. Please try again.");
-    },
-    onSuccess(result, _vars, ctx) {
-      if (!ctx || !result) return;
-      toast.success(`Successfully created batch ${result.batchNumber}/${result.totalBatches} with ${result.rowsCreated} rows!`);
-      void utils.table.getTableById.invalidate({ baseId: baseId ?? '', tableId: activeTableId ?? '' }); 
-      // Ensure we're still at the top after backend confirmation
-      if (tableContainerRef.current) {
-        tableContainerRef.current.scrollTop = 0;
-      }
-    },
-    onSettled(_data, _error, { tableId }) {
-      // Final cleanup - invalidate to ensure consistency
-      if (baseId) {
-        void utils.table.getTableById.invalidate({ baseId, tableId });
-      }
-    },
-  });
   // ========================================================================================
   // COMPUTED VALUES
   // ========================================================================================
-  
+
   // Columns definition
   const memorizedColumns = useMemo(() => {
     if (!tableData || !activeTableId) return [];
 
     return tableData.columns
-      .filter(col => columnVisibility[col.id] !== false)
+      .filter(col => tableOperations.columnVisibility[col.id] !== false)
       .map((col) => ({
         accessorKey: col.id,
         header: col.name,
@@ -632,22 +562,28 @@ export default function BasePage() {
           tableId={activeTableId}
           rowId={props.row.id}
           columnId={props.column.id}
-          searchTerm={debouncedSearchTerm}
-        />
+          searchTerm={tableOperations.searchTerm}        />
         ),
       }));
-  }, [tableData, activeTableId, debouncedSearchTerm, columnVisibility]);
+  }, [tableData, activeTableId, tableOperations.searchTerm, tableOperations.columnVisibility]);
 
   // Different combinations of filtering and sorting
   const finalRows = useMemo<BackendRow[]>(() => {
-    if (!filteredData && !sortedData) return tableData?.rows ?? [];
-    if (filteredData && !sortedData) return filteredData;
-    if (!filteredData && sortedData) return sortedData;
-    if (!filteredData || !sortedData) return [];
-
+    
+    if (filteredData && sortedData) {
     const filteredIds = new Set(filteredData.map(row => row.id));
     return sortedData.filter(row => filteredIds.has(row.id));
-  }, [filteredData, sortedData, tableData?.rows]);
+  }
+    if (filteredData && !sortedData) {
+    return filteredData;
+  }
+  
+  if (!filteredData && sortedData) {
+    return sortedData;
+  }
+  
+  return tableData?.rows ?? [];
+}, [tableData?.rows, filteredData, sortedData]);
 
   const memorizedTransformedRows = useMemo<FlattenedRow[]>(() => {
     return finalRows.map((row: BackendRow) => {
@@ -665,20 +601,22 @@ export default function BasePage() {
 
   // Search results calculation
   const searchResults = useMemo(() => {
-    if (!debouncedSearchTerm.trim() || !tableData) {
+    if (!tableOperations.searchTerm.trim()) {
       return { totalMatches: 0 };
     }
 
     let totalMatches = 0;
-    const searchLower = debouncedSearchTerm.toLowerCase();
+    const searchLower = tableOperations.searchTerm.toLowerCase();
 
-    tableData.columns.forEach(column => {
+    // Search in column names
+    tableData?.columns.forEach(column => {
       if (column.name.toLowerCase().includes(searchLower)) {
         totalMatches++;
       }
     });
 
-    tableData.rows.forEach(row => {
+    // Search in current data (filtered/sorted or original)
+    finalRows.forEach(row => {
       row.cells.forEach(cell => {
         const cellValue = String(cell.value ?? '').toLowerCase();
         if (cellValue.includes(searchLower)) {
@@ -688,7 +626,7 @@ export default function BasePage() {
     });
 
     return { totalMatches };
-  }, [debouncedSearchTerm, tableData]);
+  }, [tableOperations.searchTerm, tableData?.columns, finalRows]);
 
   // Initialize TanStack table
   const table = useReactTable<FlattenedRow>({
@@ -703,6 +641,19 @@ export default function BasePage() {
     getScrollElement: () => tableContainerRef.current,
     estimateSize: () => 40,
     overscan: 10,
+  });
+
+  const { 
+    creationProgress: bulkCreationProgress, 
+    handleCreateManyRows, 
+    isCreating: isBulkCreating 
+  } = useCreateManyRows({
+    baseId: baseId ?? '',
+    tableId: activeTableId ?? '',
+    rowVirtualizer,
+    onComplete: () => {
+      console.log('Bulk row creation completed!');
+    }
   });
 
   // ========================================================================================
@@ -725,29 +676,18 @@ export default function BasePage() {
 
   // Initialize column visibility when table data loads
   useEffect(() => {
-    if (!tableData) return;
-
-    const visibilityState = tableData.columns.reduce((acc, col) => {
-      acc[col.id] = col.visible;
-      return acc;
-    }, {} as Record<string, boolean>);
-    
-    set({ columnVisibility: visibilityState });
-  }, [tableData, set]);
-
-  // Reset filtered data when table data loads
-  useEffect(() => {
-    if (tableData) {
-      set({ filteredData: null });
+    if (tableData?.columns) {
+      initializeColumnVisibility(tableData.columns);
     }
-  }, [tableData, set]);
+  }, [tableData?.columns, initializeColumnVisibility]);
 
-  // Reset sorted data when active table changes
   useEffect(() => {
-    set({ sortedData: null });
+    set({ 
+      filteredData: null,
+      sortedData: null 
+    });
   }, [activeTableId, set]);
 
-  // Click outside handler - resetting
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (tableRef.current && !tableRef.current.contains(e.target as Node)) {
@@ -778,6 +718,8 @@ export default function BasePage() {
 
   // Infinite scrolling handler
   useEffect(() => {
+    if (filteredData || sortedData) return;
+      
     const virtualItems = rowVirtualizer.getVirtualItems();
     const [lastItem] = virtualItems.slice(-1);
     
@@ -803,11 +745,6 @@ export default function BasePage() {
   // ========================================================================================
   // EVENT HANDLERS
   // ========================================================================================
-  
-  const handleSearchChange = useCallback((val: string) => {
-    setSearchTerm(val);
-    toast.dismiss();
-  }, []);
 
   const handleAddTable = useCallback(async () => {
     if (!baseId) {
@@ -942,46 +879,6 @@ export default function BasePage() {
       }, 500);
     }
   }, [baseId, activeTableId, renameColumn]);
-
-  const handleApplySort = useCallback((rules: { columnId: string; direction: string }[]) => {
-    if (!tableData) return;
-    
-    const finalRules = rules.length === 0
-      ? [{ columnId: "createdAt", direction: "asc" as SortDirection }]
-      : rules.map((r) => ({
-          columnId: r.columnId,
-          direction: (r.direction === "desc" ? "desc" : "asc") as SortDirection,
-        }));
-
-    sortRecordsMutation.mutate({
-      tableId: tableData.id,
-      sortBy: finalRules,
-    });
-  }, [tableData, sortRecordsMutation]);
-
-  const handleToggleColumnVisibility = useCallback(async (columnId: string) => {
-    const newVisibility = !columnVisibility[columnId];
-    const currentVisibility = useUIStore.getState().columnVisibility;
-    set({
-      columnVisibility: {
-        ...currentVisibility,
-        [columnId]: newVisibility,
-      },
-    });
-
-    try {
-      await updateColumnVisibility.mutateAsync({
-        columnId,
-        visible: newVisibility,
-      });
-    } catch (error) {
-      console.error("Toggle column visibility failed:", error);
-    }
-  }, [columnVisibility, set, updateColumnVisibility]);
-
-  const handleFilteredDataChange = useCallback((data: BackendRow[] | null) => {
-    set({filteredData: data});
-  }, [set]);
 
   const toggleUserMenu = useCallback(() => set({userProfile: !userProfile}), [set, userProfile]);
 
@@ -1144,35 +1041,12 @@ export default function BasePage() {
         />
 
         <TableToolbar   
-          onSearchChange={handleSearchChange} 
-          searchResult={searchResults}
-          onToggleColumnVisibility={handleToggleColumnVisibility}
+          tableId={activeTableId ?? ""}
+          baseId={baseId ?? ""}
           columns={tableData?.columns ?? []}
-          columnVisibility={columnVisibility}
-          tableId={tableData?.id ?? ""}
-          onFilteredDataChange={handleFilteredDataChange}
-          sortRules={sortRules}
-          setSortRules={(rules) => set({ sortRules: rules })}
-          onApplySort={handleApplySort}
-          onDataRefresh={async () => {
-            if (tableContainerRef.current) {
-              tableContainerRef.current.scrollTop = 0;
-            }
-            
-            set({ 
-              filteredData: null,
-              sortedData: null,
-              selectedRows: new Set(),
-              allSelected: false
-            });
-            
-            await utils.table.getTableById.invalidate({ baseId: baseId ?? '', tableId: activeTableId ?? '' });
-            await utils.table.getTableById.refetch({ baseId: baseId ?? '', tableId: activeTableId ?? '' });
-            
-            setTimeout(() => {
-              rowVirtualizer.scrollToIndex(0);
-            }, 100);
-          }}
+          onCreateManyRows={handleCreateManyRows}
+          isBulkCreating={isBulkCreating}
+          bulkCreationProgress={bulkCreationProgress}
         />
 
         {/* Main Content with Sidebar and Table */}
@@ -1230,7 +1104,7 @@ export default function BasePage() {
                               className={`relative group border-b border-r border-gray-300 px-2 py-1 text-sm text-gray-800 text-left hover:bg-gray-100 font-semibold ${
                                 selectedColIndex === index ? "bg-blue-50" : ""
                               } ${
-                                isColumnSorted(header.column.id) ? "bg-[#ffe0cc]" : ""
+                                sortedColumnIds.has(header.column.id) ? "bg-[#ffe0cc]" : ""
                               }`}
                               style={{ width: index === 0 ? '200px' : '150px' }}
                             >
@@ -1251,7 +1125,7 @@ export default function BasePage() {
                                     dangerouslySetInnerHTML={{
                                       __html: highlightSearchTerm(
                                         flexRender(header.column.columnDef.header, header.getContext()) as string,
-                                        debouncedSearchTerm
+                                        tableOperations.searchTerm
                                       )
                                     }}
                                   />
@@ -1262,7 +1136,7 @@ export default function BasePage() {
                                     dangerouslySetInnerHTML={{
                                       __html: highlightSearchTerm(
                                         flexRender(header.column.columnDef.header, header.getContext()) as string,
-                                        debouncedSearchTerm
+                                        tableOperations.searchTerm
                                       )
                                     }}
                                   />
@@ -1437,7 +1311,7 @@ export default function BasePage() {
                                             ? "bg-gray-100"
                                             : ""
                                         } ${
-                                          isColumnSorted(cell.column.id) ? "bg-[#ffe0cc]" : ""
+                                          sortedColumnIds.has(cell.column.id) ? "bg-[#ffe0cc]" : ""
                                         }`}
 
                                         style={{ 
@@ -1518,7 +1392,7 @@ export default function BasePage() {
                     </tbody>
                   </table>
 
-                  {createManyRows.isPending && (
+                  {isBulkCreating && (
                     <div className="flex justify-center py-4">
                       <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
                     </div>
