@@ -82,53 +82,6 @@
         }
     });
 
-    const columnVisibilityMutation = api.table.updateColumnVisibility.useMutation({
-        onSuccess: () => {
-        toast.success('Column visibility updated'), {
-          autoClose: 1000,
-        }},
-        onError: () => {
-        toast.error('Failed to update column visibility');
-        }
-    });
-
-    // =============================================================================
-    // SEARCH OPERATIONS
-    // =============================================================================
-    
-    const updateSearch = useCallback((term: string) => {
-        setOperations(prev => ({ ...prev, searchTerm: term }));
-        
-        // Calculate search results
-        if (!term.trim()) {
-        setOperations(prev => ({ ...prev, searchResults: { totalMatches: 0 } }));
-        return;
-        }
-
-        let totalMatches = 0;
-        const searchLower = term.toLowerCase();
-
-        // Search in column names
-        columns.forEach(column => {
-        if (column.name.toLowerCase().includes(searchLower)) {
-            totalMatches++;
-        }
-        });
-
-        setOperations(prev => ({ 
-        ...prev, 
-        searchResults: { totalMatches }
-        }));
-    }, [columns]);
-
-    const clearSearch = useCallback(() => {
-        setOperations(prev => ({ 
-        ...prev, 
-        searchTerm: '',
-        searchResults: { totalMatches: 0 }
-        }));
-    }, []);
-
     // =============================================================================
     // FILTER OPERATIONS
     // =============================================================================
@@ -280,48 +233,6 @@
     }, [set]);
 
     // =============================================================================
-    // COLUMN VISIBILITY OPERATIONS
-    // =============================================================================
-    
-    const toggleColumnVisibility = useCallback(async (columnId: string) => {
-        const currentVisibility = operations.columnVisibility[columnId] ?? true;
-        const newVisibility = !currentVisibility;
-        
-        setOperations(prev => ({
-        ...prev,
-        columnVisibility: {
-            ...prev.columnVisibility,
-            [columnId]: newVisibility
-        }
-        }));
-
-        try {
-        await columnVisibilityMutation.mutateAsync({
-            columnId,
-            visible: newVisibility,
-        });
-        } catch (error) {
-        setOperations(prev => ({
-            ...prev,
-            columnVisibility: {
-            ...prev.columnVisibility,
-            [columnId]: currentVisibility
-            }
-        }));
-        console.error("Toggle column visibility failed:", error);
-        }
-    }, [operations.columnVisibility, columnVisibilityMutation]);
-
-    const initializeColumnVisibility = useCallback((columns: Column[]) => {
-        const visibilityState = columns.reduce((acc, col) => {
-        acc[col.id] = col.visible;
-        return acc;
-        }, {} as Record<string, boolean>);
-        
-        setOperations(prev => ({ ...prev, columnVisibility: visibilityState }));
-    }, []);
-
-    // =============================================================================
     // COMPUTED VALUES
     // =============================================================================
     
@@ -338,10 +249,7 @@
         isAnyColumnHidden,
         activeFiltersCount,
         activeSortsCount,
-        
-        updateSearch,
-        clearSearch,
-        
+
         addFilter,
         removeFilter,
         applyFilters,
@@ -354,11 +262,7 @@
         applySorts,
         clearAllSorts,
         
-        toggleColumnVisibility,
-        initializeColumnVisibility,
-        
         isFilterLoading,
         isSortLoading,
-        isColumnVisibilityLoading: columnVisibilityMutation.isPending,
     };
     }

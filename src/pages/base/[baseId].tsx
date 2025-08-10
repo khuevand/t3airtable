@@ -104,7 +104,13 @@ export default function BasePage() {
 
   // Filter & sort 
   const filteredData = useUIStore(s => s.filteredData);
+  const sortRules = useUIStore((state) => state.sortRules);
   const sortedData   = useUIStore(s => s.sortedData);
+
+  const columnVisibility = useUIStore(s => s.columnVisibility ?? {});
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm] = useDebounce(searchTerm, 200);
 
   // Access user account
   const userProfile = useUIStore((state) => state.userProfile);
@@ -189,19 +195,10 @@ export default function BasePage() {
     baseId: baseId ?? '',
   }, { enabled: !!baseId });
 
-   // Add the centralized table operations
-  const {
-    operations: tableOperations,
-    initializeColumnVisibility
-  } = useTableOperations({
-    tableId: activeTableId ?? "",
-    baseId: baseId ?? "",
-    columns: tableData?.columns ?? []
-  });
 
   const sortedColumnIds = useMemo(() => {
-    return new Set((tableOperations.sortRules ?? []).map(r => r.columnId).filter(Boolean));
-  }, [tableOperations.sortRules]);
+    return new Set((sortRules ?? []).map(r => r.columnId).filter(Boolean));
+  }, [sortRules]);
 
   // ========================================================================================
   // OPTIMISTIC MUTATION HELPER
@@ -546,7 +543,7 @@ export default function BasePage() {
     if (!tableData || !activeTableId) return [];
 
     return tableData.columns
-      .filter(col => tableOperations.columnVisibility[col.id] !== false)
+      .filter(col => columnVisibility[col.id] !== false)
       .map((col) => ({
         accessorKey: col.id,
         header: col.name,
@@ -562,10 +559,10 @@ export default function BasePage() {
           tableId={activeTableId}
           rowId={props.row.id}
           columnId={props.column.id}
-          searchTerm={tableOperations.searchTerm}        />
+          searchTerm={searchTerm}        />
         ),
       }));
-  }, [tableData, activeTableId, tableOperations.searchTerm, tableOperations.columnVisibility]);
+  }, [tableData, activeTableId, searchTerm, columnVisibility]);
 
   // Different combinations of filtering and sorting
   const finalRows = useMemo<BackendRow[]>(() => {
@@ -601,22 +598,20 @@ export default function BasePage() {
 
   // Search results calculation
   const searchResults = useMemo(() => {
-    if (!tableOperations.searchTerm.trim()) {
+    if (!debouncedSearchTerm.trim() || !tableData) {
       return { totalMatches: 0 };
     }
 
     let totalMatches = 0;
-    const searchLower = tableOperations.searchTerm.toLowerCase();
+    const searchLower = debouncedSearchTerm.toLowerCase();
 
-    // Search in column names
-    tableData?.columns.forEach(column => {
+    tableData.columns.forEach(column => {
       if (column.name.toLowerCase().includes(searchLower)) {
         totalMatches++;
       }
     });
 
-    // Search in current data (filtered/sorted or original)
-    finalRows.forEach(row => {
+    tableData.rows.forEach(row => {
       row.cells.forEach(cell => {
         const cellValue = String(cell.value ?? '').toLowerCase();
         if (cellValue.includes(searchLower)) {
@@ -626,7 +621,7 @@ export default function BasePage() {
     });
 
     return { totalMatches };
-  }, [tableOperations.searchTerm, tableData?.columns, finalRows]);
+  }, [debouncedSearchTerm, tableData]);
 
   // Initialize TanStack table
   const table = useReactTable<FlattenedRow>({
@@ -676,10 +671,15 @@ export default function BasePage() {
 
   // Initialize column visibility when table data loads
   useEffect(() => {
-    if (tableData?.columns) {
-      initializeColumnVisibility(tableData.columns);
-    }
-  }, [tableData?.columns, initializeColumnVisibility]);
+    if (!tableData) return;
+
+    const visibilityState = tableData.columns.reduce((acc, col) => {
+      acc[col.id] = col.visible;
+      return acc;
+    }, {} as Record<string, boolean>);
+    
+    set({ columnVisibility: visibilityState });
+  }, [tableData, set]);
 
   useEffect(() => {
     set({ 
@@ -880,6 +880,27 @@ export default function BasePage() {
     }
   }, [baseId, activeTableId, renameColumn]);
 
+  const handleSearchChange = useCallback((val: string) => {
+    setSearchTerm(val);
+    toast.dismiss();
+  }, []);
+
+  const handleToggleColumnVisibility = useCallback(async (columnId: string) => {
+    const newVisibility = !columnVisibility[columnId];
+    const currentVisibility = useUIStore.getState().columnVisibility;
+    set({
+      columnVisibility: {
+        ...currentVisibility,
+        [columnId]: newVisibility,
+      },
+    });
+
+    updateColumnVisibility.mutate({
+      columnId,
+      visible: newVisibility,
+    });
+  }, [columnVisibility, set, updateColumnVisibility]);
+
   const toggleUserMenu = useCallback(() => set({userProfile: !userProfile}), [set, userProfile]);
 
   const handleSetActiveTable = useCallback((tableId: string) => {
@@ -1043,7 +1064,11 @@ export default function BasePage() {
         <TableToolbar   
           tableId={activeTableId ?? ""}
           baseId={baseId ?? ""}
+          onSearchChange={handleSearchChange} 
+          searchResult={searchResults}
+          onToggleColumnVisibility={handleToggleColumnVisibility}
           columns={tableData?.columns ?? []}
+          columnVisibility={columnVisibility}
           onCreateManyRows={handleCreateManyRows}
           isBulkCreating={isBulkCreating}
           bulkCreationProgress={bulkCreationProgress}
@@ -1125,7 +1150,7 @@ export default function BasePage() {
                                     dangerouslySetInnerHTML={{
                                       __html: highlightSearchTerm(
                                         flexRender(header.column.columnDef.header, header.getContext()) as string,
-                                        tableOperations.searchTerm
+                                        searchTerm
                                       )
                                     }}
                                   />
@@ -1136,7 +1161,7 @@ export default function BasePage() {
                                     dangerouslySetInnerHTML={{
                                       __html: highlightSearchTerm(
                                         flexRender(header.column.columnDef.header, header.getContext()) as string,
-                                        tableOperations.searchTerm
+                                        searchTerm
                                       )
                                     }}
                                   />

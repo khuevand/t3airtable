@@ -16,11 +16,16 @@ import {
   Plus,
 } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useDebounce } from "use-debounce";
 
 interface Props {
   tableId: string;
   baseId: string;
   columns: Array<{ id: string; name: string; visible: boolean }>;
+  onSearchChange?: (value: string) => void;
+  searchResult?: { totalMatches: number };
+  onToggleColumnVisibility: (columnId: string) => void;
+  columnVisibility: Record<string, boolean>;
   onCreateManyRows?: (count: number) => void;
   isBulkCreating?: boolean;
   bulkCreationProgress?: {
@@ -34,7 +39,11 @@ interface Props {
 export default function TableToolbar({
   tableId,
   baseId,
+  onSearchChange,
+  searchResult,
+  onToggleColumnVisibility,
   columns,
+  columnVisibility,
   onCreateManyRows,
   isBulkCreating = false,
   bulkCreationProgress,
@@ -46,14 +55,8 @@ export default function TableToolbar({
   
   const {
     operations,
-    isAnyColumnHidden,
     activeFiltersCount,
     activeSortsCount,
-    
-    // Search
-    updateSearch,
-    clearSearch,
-    
     // Filter  
     addFilter,
     removeFilter,
@@ -68,20 +71,24 @@ export default function TableToolbar({
     applySorts,
     clearAllSorts,
     
-    // Column Visibility
-    toggleColumnVisibility,
-    initializeColumnVisibility,
-    
     // Loading states
     isFilterLoading,
     isSortLoading,
-    isColumnVisibilityLoading,
+
   } = useTableOperations({ tableId, baseId, columns });
 
   // ============================================================================
   // LOCAL UI STATE (only for dropdowns)
   // ============================================================================
-  
+    // Hide
+  const [showSearchBox, setShowSearchBox] = useState(false);
+  const [showHideFields, setShowHideFields] = useState(false);
+  const isAnyColumnHidden = Object.values(columnVisibility).some((visible) => !visible);
+
+  // Search 
+  const [inputValue, setInputValue] = useState("");
+  const [debounced] = useDebounce(inputValue, 300);
+
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [tempFilterForm, setTempFilterForm] = useState({
     columnId: '',
@@ -91,24 +98,48 @@ export default function TableToolbar({
 
   // Refs for click outside
   const toolbarRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const hideFieldsRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
 
   // ============================================================================
   // EFFECTS
   // ============================================================================
   
   useEffect(() => {
-    initializeColumnVisibility(columns);
-  }, [columns, initializeColumnVisibility]);
+      if (onSearchChange) onSearchChange(debounced);
+    }, [debounced, onSearchChange]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (toolbarRef.current && !toolbarRef.current.contains(event.target as Node)) {
-        setActiveDropdown(null);
+      if (hideFieldsRef.current && !hideFieldsRef.current.contains(event.target as Node)) {
+        setShowHideFields(false);
+      }
+      // Close the search dropdown if click is outside it
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        if (activeDropdown === 'search') setActiveDropdown(null);
       }
     };
+
+  document.addEventListener('mousedown', handleClickOutside);
+  return () => document.removeEventListener('mousedown', handleClickOutside);
+}, [activeDropdown]);
+
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (hideFieldsRef.current && !hideFieldsRef.current.contains(event.target as Node)) {
+        setShowHideFields(false);
+      }
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSearchBox(false);
+      }
+    };
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
 
   // ============================================================================
   // HANDLERS
@@ -156,36 +187,35 @@ export default function TableToolbar({
   // ============================================================================
   
   const renderSearchDropdown = () => (
-    <div className="absolute right-0 top-full mt-1 z-50 w-64 bg-white border rounded shadow-md px-3 py-2 text-sm">
+    <div ref={searchRef}
+        className="absolute right-0 top-full mt-1 z-50 w-64 bg-white border rounded shadow-md px-3 py-2 text-sm">
       <div className="flex items-center justify-between mb-2">
         <span className="font-medium text-gray-700">Search</span>
-        <button onClick={() => setActiveDropdown(null)}>
+        <button
+          onClick={() => {
+            setActiveDropdown(null);
+            onSearchChange?.("");
+            setInputValue("");
+          }}
+        >
           <X className="w-4 h-4 text-gray-500 hover:text-gray-700" />
         </button>
       </div>
       <input
+        ref={inputRef}
         type="text"
         placeholder="Search..."
-        value={operations.searchTerm}
-        onChange={(e) => updateSearch(e.target.value)}
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
         className="w-full border px-2 py-1 rounded text-sm outline-none mb-2"
-        autoFocus
       />
       <div className="text-xs text-gray-500">
-        {operations.searchResults.totalMatches
-          ? `Found ${operations.searchResults.totalMatches} match${
-              operations.searchResults.totalMatches > 1 ? "es" : ""
+        {searchResult?.totalMatches
+          ? `Found ${searchResult.totalMatches} match${
+              searchResult.totalMatches > 1 ? "es" : ""
             }`
           : "No matches"}
       </div>
-      {operations.searchTerm && (
-        <button
-          onClick={clearSearch}
-          className="mt-2 text-xs text-blue-600 hover:underline"
-        >
-          Clear search
-        </button>
-      )}
     </div>
   );
 
@@ -202,15 +232,12 @@ export default function TableToolbar({
           <div key={column.id} className="flex items-center justify-between">
             <span>{column.name}</span>
             <button
-              onClick={() => toggleColumnVisibility(column.id)}
-              disabled={isColumnVisibilityLoading}
-              className={`p-2 rounded-full transition-colors ${
-                !operations.columnVisibility[column.id] 
-                  ? 'bg-gray-300' 
-                  : 'bg-green-400'
-              } ${isColumnVisibilityLoading ? 'opacity-50' : ''}`}
+              onClick={() => onToggleColumnVisibility(column.id)}
+              className={`p-2 rounded-full ${
+                !columnVisibility[column.id] ? 'bg-gray-300' : 'bg-green-400'
+              }`}
             >
-              {!operations.columnVisibility[column.id] ? (
+              {!columnVisibility[column.id] ? (
                 <ToggleLeft className="w-4 h-4 text-gray-700" />
               ) : (
                 <ToggleRight className="w-4 h-4 text-gray-700" />
@@ -563,7 +590,7 @@ export default function TableToolbar({
             <button
               onClick={() => handleDropdownToggle('search')}
               className={`p-1 hover:bg-gray-100 rounded transition-colors ${
-                operations.searchTerm ? "bg-blue-100 text-blue-700" : ""
+              inputValue.trim() ? "bg-blue-100 text-blue-700" : ""
               }`}
             >
               <Search className="w-4 h-4 text-gray-600" />
@@ -596,7 +623,7 @@ export default function TableToolbar({
         </div>
       )}
 
-      {/* Operation Status Indicators */}
+      {/* Operation Status Indicators
       {(isFilterLoading || isSortLoading || operations.searchTerm) && (
         <div className="px-4 py-1 bg-gray-50 border-b border-gray-200 text-xs text-gray-600 flex items-center gap-4">
           {operations.searchTerm && (
@@ -632,7 +659,7 @@ export default function TableToolbar({
             </div>
           )}
         </div>
-      )}
+      )} */}
     </div>
   );
 }
