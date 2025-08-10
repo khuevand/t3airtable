@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
 import { createTRPCRouter, privateProcedure } from "~/server/api/trpc";
+import { Prisma } from "@prisma/client";
+import { TRPCError } from "@trpc/server";
 
 export const baseRouter = createTRPCRouter({
   getAll: privateProcedure
@@ -138,28 +140,32 @@ export const baseRouter = createTRPCRouter({
     }),
 
   deleteBase: privateProcedure
-    .input(z.object({ baseId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const userId = ctx.currentUser?.id;
-      if (!userId) throw new Error("Unauthorized");
+  .input(z.object({ baseId: z.string() }))
+  .mutation(async ({ ctx, input }) => {
+    const userId = ctx.currentUser?.id;
+    if (!userId) throw new TRPCError({ code: "UNAUTHORIZED" });
 
-      const base = await ctx.db.base.findFirst({
-        where: { 
-          id: input.baseId,
-          userId: userId
-        },
-      });
+    const base = await ctx.db.base.findUnique({
+      where: { id: input.baseId },
+      select: { userId: true },
+    });
+    if (!base || base.userId !== userId) {
+      return { success: true, baseId: input.baseId, alreadyDeleted: true };
+    }
 
-      if (!base) {
-        throw new Error("Base not found or you don't have permission to delete it.");
+    try {
+      await ctx.db.base.delete({ where: { id: input.baseId } });
+      return { success: true, baseId: input.baseId };
+    } catch (e) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === "P2025" // record to delete does not exist
+      ) {
+        return { success: true, baseId: input.baseId, alreadyDeleted: true };
       }
-
-      await ctx.db.base.delete({
-        where: { id: input.baseId },
-      });
-
-      return { success: true, message: "Base deleted." };
-    }),
+      throw e;
+    }
+  }),
 
   getBaseName: privateProcedure
     .input(z.object({ baseId: z.string() }))

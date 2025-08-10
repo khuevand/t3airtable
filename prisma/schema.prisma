@@ -53,6 +53,7 @@ model Column {
 
 model Row {
   id      String @id @default(cuid())
+  createdAt DateTime @default(now())
   tableId String
   table   Table  @relation("TableRows", fields: [tableId], references: [id], onDelete: Cascade)
   cells   Cell[] @relation("RowCells")

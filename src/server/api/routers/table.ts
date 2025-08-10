@@ -5,7 +5,8 @@ export const tableRouter = createTRPCRouter({
   addTable: privateProcedure
   .input(
       z.object({
-      baseId: z.string()
+      baseId: z.string(),
+      currentTableName: z.string()
       })
   )
   .mutation(async ({ ctx, input }) => {

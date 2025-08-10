@@ -46,58 +46,68 @@ export const rowRouter = createTRPCRouter({
     }),
 
   createManyRowsBatch: privateProcedure
-    .input(z.object({
-      tableId: z.string(),
-      count: z.number().min(1).max(1000),
-      batchNumber: z.number().min(1),
-      totalBatches: z.number().min(1),
-    }))
-    .mutation(async ({ ctx, input }) => {
-      const { tableId, count, batchNumber, totalBatches } = input;
+  .input(z.object({
+    tableId: z.string(),
+    count: z.number().min(1).max(1000),
+    batchNumber: z.number().min(1),
+    totalBatches: z.number().min(1),
+  }))
+  .mutation(async ({ ctx, input }) => {
+    const { tableId, count, batchNumber, totalBatches } = input;
 
-      const columns = await ctx.db.column.findMany(
-        { where: { tableId } }
-      );
-      
-      if (!columns.length) throw new Error("No columns found for this table");
+    const columns = await ctx.db.column.findMany(
+      { where: { tableId } }
+    );
+    
+    if (!columns.length) throw new Error("No columns found for this table");
 
-      const rowsData = Array.from({ length: count }).map(() => ({
-        id: crypto.randomUUID(),
-        tableId,
-      }));
+    const rowsData = Array.from({ length: count }).map(() => ({
+      id: crypto.randomUUID(),
+      tableId,
+    }));
 
-      const cellsData = rowsData.flatMap((row) =>
-        columns.map((col) => ({
-          rowId: row.id,
-          columnId: col.id,
-          value: faker.word.words(2),
-        }))
-      );
+    const cellsData = rowsData.flatMap((row) =>
+      columns.map((col) => ({
+        rowId: row.id,
+        columnId: col.id,
+        value: faker.word.words(2),
+      }))
+    );
 
-      try {
-        await ctx.db.row.createMany({ data: rowsData, skipDuplicates: true });
+    try {
+      await ctx.db.row.createMany({ data: rowsData, skipDuplicates: true });
 
-        // insert cells in smaller chunks to avoid overload
-        const CHUNK_SIZE = 1000;
-        for (let i = 0; i < cellsData.length; i += CHUNK_SIZE) {
-          const chunk = cellsData.slice(i, i + CHUNK_SIZE);
-          await ctx.db.cell.createMany({ data: chunk });
-        }
-
-        return {
-          success: true,
-          batchNumber,
-          totalBatches,
-          rowsCreated: rowsData.length,
-          cellsCreated: cellsData.length,
-        };
-      } catch (error) {
-        console.error(`Batch ${batchNumber}/${totalBatches} failed:`, error);
-        throw new Error(
-          `Failed to create batch ${batchNumber}: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`
-        );
+      const CHUNK_SIZE = 1000;
+      for (let i = 0; i < cellsData.length; i += CHUNK_SIZE) {
+        const chunk = cellsData.slice(i, i + CHUNK_SIZE);
+        await ctx.db.cell.createMany({ data: chunk });
       }
-    }),
+
+      const createdRows = await ctx.db.row.findMany({
+        where: { 
+          id: { in: rowsData.map(r => r.id) }
+        },
+        include: {
+          cells: true,
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      return { // return actual created row
+        success: true,
+        batchNumber,
+        totalBatches,
+        rowsCreated: rowsData.length,
+        cellsCreated: cellsData.length,
+        rows: createdRows, 
+      };
+    } catch (error) {
+      console.error(`Batch ${batchNumber}/${totalBatches} failed:`, error);
+      throw new Error(
+        `Failed to create batch ${batchNumber}: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
+  }),
 });

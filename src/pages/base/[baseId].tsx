@@ -8,17 +8,17 @@ import {
 } from "@tanstack/react-table";
 import type { CellContext } from "@tanstack/react-table";
 import { isCancelledError } from "@tanstack/react-query";
-import {ChevronDown,
-        CheckSquare,
-        Square,
-        Search,
-        Settings,
-        Table,
-        ArrowLeft,
-        Info,
-        Bell,
-        Plus,
-        History} from "lucide-react";
+import {
+  CheckSquare,
+  Square,
+  Search,
+  Settings,
+  Table,
+  ArrowLeft,
+  Info,
+  Bell,
+  Plus,
+} from "lucide-react";
 import { api } from "~/utils/api";
 import { useParams } from "next/navigation";
 import Image from "next/image";
@@ -29,9 +29,12 @@ import { highlightSearchTerm } from "~/components/highlightSearchTerm";
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useUIStore } from "~/stores/useUIstores";
 import type { BackendRow, FlattenedRow } from "~/types/row";
+import EditableCell from "~/components/editableCells";
+import HeaderLayout from "~/components/headerLayout";
+import TableTabs from "~/components/tableTabs";
 
 // ========================================================================================
-// TYPE DEFINITIONS AND COLOR PICK
+// TYPE DEFINITIONS
 // ========================================================================================
 
 interface Table {
@@ -39,94 +42,32 @@ interface Table {
   name: string;
 }
 
-type SortDirection = "asc" | "desc";
-
-interface EditableCellProps {
-  initialValue: string;
+interface TempColumn {
+  id: string;
+  name: string;
+  type: string;
+  order: number;
   tableId: string;
-  rowId: string;
-  columnId: string;
-  searchTerm?: string;
+  visible: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
-// ========================================================================================
-// EDITABLE CELL COMPONENT
-// ========================================================================================
+interface TempCell {
+  id: string;
+  columnId: string;
+  value: string | number;
+  rowId: string;
+}
 
-const EditableCell: React.FC<EditableCellProps> = ({
-  initialValue,
-  rowId,
-  columnId,
-  searchTerm = '',
-}) => {
-  // State
-  const [value, setValue] = useState(initialValue ?? '');
-  const [isEditing, setIsEditing] = useState(false);
-  
-  // Refs
-  const inputRef = useRef<HTMLInputElement>(null);
-  
-  // API
-  const updateCell = api.cell.updateCell.useMutation();
+interface TempRow {
+  id: string;
+  cells: TempCell[];
+  createdAt?: Date;
+  updatedAt?: Date;
+}
 
-  const handleBlur = useCallback(() => {
-    setIsEditing(false);
-    if (value !== initialValue) {
-      updateCell.mutate({ rowId, columnId, value: value || null });
-    }
-  }, [value, initialValue, updateCell, rowId, columnId]);
-
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setValue(e.target.value);
-  }, []);
-
-  const handleFocus = useCallback(() => {
-    setIsEditing(true);
-  }, []);
-
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      inputRef.current?.blur();
-    }
-    if (e.key === 'Escape') {
-      setValue(initialValue || '');
-      inputRef.current?.blur();
-    }
-  }, [initialValue]);
-
-  const highlightedText = useMemo(() => 
-    highlightSearchTerm(String(value || ''), searchTerm), 
-    [value, searchTerm]
-  );
-
-  return (
-    <div className="relative w-full min-h-[32px] flex items-center">
-      {isEditing ? (
-        // Show input when editing
-        <input
-          ref={inputRef}
-          className="w-full h-full border-none bg-transparent text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 px-1"
-          value={value}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          onKeyDown={handleKeyDown}
-          autoFocus
-        />
-      ) : (
-        // Show display version when not editing
-        <div 
-          className="w-full h-full px-1 py-1 cursor-text flex items-center min-h-[32px]"
-          onClick={handleFocus}
-          onDoubleClick={handleFocus}
-        >
-          {value ? (
-            <div dangerouslySetInnerHTML={{ __html: highlightedText }} />
-          ) : null}
-        </div>
-      )}
-    </div>
-  );
-};
+type SortDirection = "asc" | "desc";
 
 // ========================================================================================
 // MAIN COMPONENT
@@ -274,112 +215,325 @@ export default function BasePage() {
   }, { enabled: !!baseId });
 
   // ========================================================================================
+  // OPTIMISTIC MUTATION HELPER
+  // ========================================================================================
+  function editInfiniteTable(
+    key: { baseId: string; tableId: string; limit?: number },
+    editor: (draft: NonNullable<ReturnType<typeof utils.table.getTableById.getInfiniteData>>) => void
+  ) {
+    utils.table.getTableById.setInfiniteData(key, (old) => {
+      if (!old) return old;
+      const copy = structuredClone(old);
+      editor(copy);
+      return copy;
+    });
+  }
+
+  const forEachPage = <T,>(pages: Array<any>, fn: (p: any) => void) => {
+    for (const p of pages) fn(p);
+  };
+
+  const currentTable = useMemo(() => {
+    const fromBase = baseData?.tables.find(t => t.id === activeTableId);
+    if (fromBase) return fromBase;
+
+    if (tableData) return { id: tableData.id, name: tableData.name };
+
+    return null;
+  }, [baseData?.tables, activeTableId, tableData?.id, tableData?.name]);
+
+  const currentTableName = currentTable?.name ?? "";
+
+  // ========================================================================================
   // API MUTATIONS
   // ========================================================================================
   
   const addTable = api.table.addTable.useMutation({
+    async onMutate({ baseId, currentTableName }) {
+      await utils.base.getBase.cancel({ baseId });
+      const prev = utils.base.getBase.getData({ baseId });
+
+      const temp = {
+        id: `temp-${Date.now()}`,
+        name: "Table",
+      };
+
+      utils.base.getBase.setData({ baseId }, (old) => {
+        if (!old) return old;
+        return { ...old, tables: [...old.tables, temp] };
+      });
+
+      return { prev, baseId };
+    },
+    onError(_err, _vars, ctx) {
+      if (ctx?.prev) utils.base.getBase.setData({ baseId: ctx.baseId }, ctx.prev);
+    },
     onSuccess: (newTable) => {
-      utils.base.getBase.setData({ baseId: baseId ?? '' }, (old) => {
+      utils.base.getBase.setData({ baseId }, (old) => {
         if (!old) return old;
         return {
           ...old,
-          tables: [...old.tables, newTable]
+          tables: old.tables.map((t) => (String(t.id).startsWith("temp-") ? newTable : t)),
         };
       });
-      
-      void utils.base.getBase.invalidate({ baseId: baseId ?? '' });
     },
-    onError: (error) => {
-      console.error("Add table error:", error);
-    }
+    onSettled(_data, _err, { baseId }) {
+      void utils.base.getBase.invalidate({ baseId });
+    },
   });
 
   const updateColumnVisibility = api.table.updateColumnVisibility.useMutation({
-    onError: (e) => console.error("Update column visibility error:", e),
-    onSuccess: () => void utils.table.getTableById.invalidate()
+    async onMutate({ columnId, visible }) {
+      if (!activeTableId || !baseId) return;
+      
+      const key = { baseId, tableId: activeTableId };
+      await utils.table.getTableById.cancel(key);
+      const prev = utils.table.getTableById.getInfiniteData(key);
+
+      editInfiniteTable(key, (data) => {
+        forEachPage(data.pages, (page) => {
+          page.columns = page.columns.map((col: any) =>
+            col.id === columnId ? { ...col, visible } : col
+          );
+        });
+      });
+
+      return { prev, key, columnId, visible };
+    },
+    onError(_err, _vars, ctx) {
+      if (ctx?.prev) utils.table.getTableById.setInfiniteData(ctx.key, ctx.prev);
+      toast.error("Failed to update column visibility. Please try again.");
+      
+      // Revert UI state as well
+      if (ctx) {
+        const currentVisibility = useUIStore.getState().columnVisibility;
+        set({
+          columnVisibility: {
+            ...currentVisibility,
+            [ctx.columnId]: !ctx.visible, // Revert to previous state
+          },
+        });
+      }
+    },
+    onSuccess(_data, _vars, _ctx) {
+    },
+    onSettled(_d, _e) {
+      if (baseId && activeTableId) {
+        void utils.table.getTableById.invalidate({ baseId, tableId: activeTableId });
+      }
+    },
   });
 
   const removeTable = api.table.deleteTable.useMutation({
-    onError: (e) => console.error("Delete table error:", e),
-    onSuccess: () => {
-      void utils.base.getBase.invalidate({ baseId: baseId ?? '' });
+    async onMutate({ tableId }) {
+      const baseIdSafe = baseId ?? "";
+      await utils.base.getBase.cancel({ baseId: baseIdSafe });
+
+      const prev = utils.base.getBase.getData({ baseId: baseIdSafe });
+      utils.base.getBase.setData({ baseId: baseIdSafe }, (old) => {
+        if (!old) return old;
+        const remaining = old.tables.filter((t) => t.id !== tableId);
+        const fallback = remaining[0]?.id ?? null;
+        set({ activeTableId: fallback }); // instant UI change
+        return { ...old, tables: remaining };
+      });
+      return { prev, baseId: baseIdSafe };
+    },
+    onError(_err, _vars, ctx) {
+      if (ctx?.prev) utils.base.getBase.setData({ baseId: ctx.baseId }, ctx.prev);
+    },
+    onSettled(_d, _e) {
+      // final sync
+      if (baseId) void utils.base.getBase.invalidate({ baseId });
     },
   });
 
   const createColumn = api.column.addColumn.useMutation({
-    onSuccess: (newColumn) => { 
-      if (activeTableId && baseId) {
-        utils.table.getTableById.setData({ baseId, tableId: activeTableId }, (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            columns: [...old.columns, newColumn].sort((a, b) => a.order - b.order)
-          };
-        });
-      }
-      
-      void utils.table.getTableById.invalidate({ baseId: baseId ?? '', tableId: activeTableId ?? '' });
+    async onMutate({ tableId, name, type }) {
+      const key = { baseId: baseId ?? "", tableId };
+      await utils.table.getTableById.cancel(key);
+      const prev = utils.table.getTableById.getInfiniteData(key);
+
+      // Create a temporary column with required properties
+      const tempCol: TempColumn = { 
+        id: `temp-col-${Date.now()}`, 
+        name, 
+        type,
+        tableId: tableId,
+        order: Number.MAX_SAFE_INTEGER, 
+        visible: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      editInfiniteTable(key, (data) => {
+        const first = data.pages[0];
+        if (!first) return;
+        first.columns.push(tempCol);
+      });
+
+      return { prev, key };
     },
-    onError: (error) => {
-      console.error("Add column error:", error);
-    }
+    onError(_err, _vars, ctx) {
+      if (ctx?.prev) utils.table.getTableById.setInfiniteData(ctx.key, ctx.prev);
+      toast.error("Failed to create column. Please try again.");
+    },
+    onSuccess(newColumn, _vars, ctx) {
+      if (!ctx) return;
+      editInfiniteTable(ctx.key, (data) => {
+        const first = data.pages[0];
+        if (!first) return;
+        first.columns = first.columns
+          .map((c: any) => String(c.id).startsWith("temp-col-") ? newColumn : c)
+          .sort((a: any, b: any) => a.order - b.order);
+      });
+      toast.success("Column created successfully!");
+    },
+    onSettled(_d, _e, { tableId }) {
+      if (baseId) void utils.table.getTableById.invalidate({ baseId, tableId });
+    },
   });
 
   const removeColumn = api.column.deleteColumn.useMutation({
-    onError: (e) => console.error("Delete column error:", e),
-    onSuccess: () => {
-      void utils.table.getTableById.invalidate({ baseId: baseId ?? '' });
-    }
+    async onMutate({ columnId }) {
+      if (!activeTableId || !baseId) return;
+      
+      const key = { baseId, tableId: activeTableId };
+      await utils.table.getTableById.cancel(key);
+      const prev = utils.table.getTableById.getInfiniteData(key);
+
+      editInfiniteTable(key, (data) => {
+        forEachPage(data.pages, (page) => {
+          page.columns = page.columns.filter((c: any) => c.id !== columnId);
+          page.rows = page.rows.map((r: any) => ({
+            ...r,
+            cells: r.cells.filter((cell: any) => cell.columnId !== columnId)
+          }));
+        });
+      });
+
+      return { prev, key, columnId };
+    },
+    onError(_err, _vars, ctx) {
+      if (ctx?.prev) utils.table.getTableById.setInfiniteData(ctx.key, ctx.prev);
+      toast.error("Failed to delete column. Please try again.");
+    },
+    onSuccess(_data, _vars, _ctx) {
+      toast.success("Column deleted successfully!");
+    },
+    onSettled(_d, _e, { columnId }) {
+      if (baseId && activeTableId) {
+        void utils.table.getTableById.invalidate({ baseId, tableId: activeTableId });
+      }
+    },
   });
 
   const createRow = api.row.addRow.useMutation({
-    onSuccess: (newRow) => {
-      toast.success("Row added successfully!", {});
-      void utils.table.getTableById.invalidate({ baseId: baseId ?? '' });
+    async onMutate({ tableId }) {
+      const key = { baseId: baseId ?? "", tableId };
+      await utils.table.getTableById.cancel(key);
+      const prev = utils.table.getTableById.getInfiniteData(key);
 
-      if (activeTableId && baseId) {
-        utils.table.getTableById.setData({ baseId, tableId: activeTableId }, (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            rows: [...old.rows, newRow]
-          };
-        });
-      }
+      // Create temporary row with empty cells for all columns
+      const tempRow = {
+        id: `temp-row-${Date.now()}`,
+        cells: tableData?.columns.map(col => ({
+          id: `temp-cell-${Date.now()}-${col.id}`,
+          columnId: col.id,
+          value: col.type === 'number' ? 0 : '',
+          rowId: `temp-row-${Date.now()}`,
+        })) || [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      editInfiniteTable(key, (data) => {
+        const lastPage = data.pages[data.pages.length - 1];
+        if (!lastPage) return;
+        lastPage.rows = [...lastPage.rows, tempRow as any];
+      });
+
+      return { prev, key, tempRowId: tempRow.id };
     },
-    onError: (error) => {
+    onError(_err, _vars, ctx) {
+      if (ctx?.prev) utils.table.getTableById.setInfiniteData(ctx.key, ctx.prev);
       toast.error("Failed to add row. Please try again.");
-      console.error("Add row error:", error);
-    }
+    },
+    onSuccess(newRow, _vars, ctx) {
+      if (!ctx) return;
+      editInfiniteTable(ctx.key, (data) => {
+        forEachPage(data.pages, (page) => {
+          page.rows = page.rows.map((r: any) => 
+            r.id === ctx.tempRowId ? newRow : r
+          );
+        });
+      });
+      toast.success("Row added successfully!");
+    },
+    onSettled(_d, _e, { tableId }) {
+      if (baseId) void utils.table.getTableById.invalidate({ baseId, tableId });
+    },
   });
 
   const deleteRow = api.row.deleteRow.useMutation({
-    onError: (e) => console.error("Delete row error:", e),
-    onSuccess: ({ rowId }) => {
+    async onMutate({ rowId }) {
       if (!activeTableId || !baseId) return;
-      utils.table.getTableById.setData({ baseId, tableId: activeTableId }, (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          rows: old.rows.filter((r) => r.id !== rowId),
-        };
+      
+      const key = { baseId, tableId: activeTableId };
+      await utils.table.getTableById.cancel(key);
+      const prev = utils.table.getTableById.getInfiniteData(key);
+
+      editInfiniteTable(key, (data) => {
+        forEachPage(data.pages, (page) => {
+          page.rows = page.rows.filter((r: any) => r.id !== rowId);
+        });
       });
+
+      return { prev, key, rowId };
+    },
+    onError(_err, _vars, ctx) {
+      if (ctx?.prev) utils.table.getTableById.setInfiniteData(ctx.key, ctx.prev);
+      toast.error("Failed to delete row. Please try again.");
+    },
+    onSuccess(_data, _vars, _ctx) {
+      toast.success("Row deleted successfully!");
+    },
+    onSettled(_d, _e, { rowId }) {
+      if (baseId && activeTableId) {
+        void utils.table.getTableById.invalidate({ baseId, tableId: activeTableId });
+      }
     },
   });
 
   const renameColumn = api.column.renameColumn.useMutation({
-    onError: (e) => console.error("Rename column error:", e),
-    onSuccess: ({ columnId, newName }) => {
+    async onMutate({ columnId, newName }) {
       if (!activeTableId || !baseId) return;
-      utils.table.getTableById.setData({ baseId, tableId: activeTableId }, (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          columns: old.columns.map((col) =>
+      
+      const key = { baseId, tableId: activeTableId };
+      await utils.table.getTableById.cancel(key);
+      const prev = utils.table.getTableById.getInfiniteData(key);
+
+      editInfiniteTable(key, (data) => {
+        forEachPage(data.pages, (page) => {
+          page.columns = page.columns.map((col: any) =>
             col.id === columnId ? { ...col, name: newName } : col
-          ),
-        };
+          );
+        });
       });
+
+      return { prev, key, columnId, newName };
+    },
+    onError(_err, _vars, ctx) {
+      if (ctx?.prev) utils.table.getTableById.setInfiniteData(ctx.key, ctx.prev);
+      toast.error("Failed to rename column. Please try again.");
+    },
+    onSuccess(_data, _vars, _ctx) {
+      toast.success("Column renamed successfully!");
+    },
+    onSettled(_d, _e, { columnId }) {
+      if (baseId && activeTableId) {
+        void utils.table.getTableById.invalidate({ baseId, tableId: activeTableId });
+      }
     },
   });
 
@@ -395,17 +549,66 @@ export default function BasePage() {
   });
 
   const createManyRows = api.row.createManyRowsBatch.useMutation({
-    onSuccess: async () => {
-      await utils.table.getTableRows.invalidate({ tableId: activeTableId ?? '' });
-      if (tableContainerRef.current) tableContainerRef.current.scrollTop = 0;
+    async onMutate({ tableId, count }) {
+      if (!baseId) return;
+      
+      const key = { baseId, tableId };
+      await utils.table.getTableById.cancel(key);
+      const prev = utils.table.getTableById.getInfiniteData(key);
+
+      // Create temporary rows with cells for all columns
+      const tempRows = Array.from({ length: count }).map((_, index) => ({
+        id: `temp-batch-row-${Date.now()}-${index}`,
+        cells: tableData?.columns.map(col => ({
+          id: `temp-batch-cell-${Date.now()}-${index}-${col.id}`,
+          columnId: col.id,
+          value: col.type === 'number' ? 0 : '',
+          rowId: `temp-batch-row-${Date.now()}-${index}`,
+        })) || [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }));
+
+      editInfiniteTable(key, (data) => {
+        data.pages = [];
+        data.pageParams = [];
+      });
+
+      // Scroll to top immediately for better UX
+      if (tableContainerRef.current) {
+        tableContainerRef.current.scrollTop = 0;
+      }
+
+      return { prev, key, tempRowIds: tempRows.map(r => r.id) };
     },
-    onError: (error) => {
+    onError(error, _vars, ctx) {
       console.error("Bulk row creation error:", error);
+      
+      // Revert optimistic update
+      if (ctx?.prev) {
+        utils.table.getTableById.setInfiniteData(ctx.key, ctx.prev);
+      }
+      
+      toast.error("Failed to create rows in batch. Please try again.");
+    },
+    onSuccess(result, _vars, ctx) {
+      if (!ctx || !result) return;
+      toast.success(`Successfully created batch ${result.batchNumber}/${result.totalBatches} with ${result.rowsCreated} rows!`);
+      void utils.table.getTableById.invalidate({ baseId: baseId ?? '', tableId: activeTableId ?? '' }); 
+      // Ensure we're still at the top after backend confirmation
+      if (tableContainerRef.current) {
+        tableContainerRef.current.scrollTop = 0;
+      }
+    },
+    onSettled(_data, _error, { tableId }) {
+      // Final cleanup - invalidate to ensure consistency
+      if (baseId) {
+        void utils.table.getTableById.invalidate({ baseId, tableId });
+      }
     },
   });
-
   // ========================================================================================
-  // COMPUTED VALUES - Move before useEffect hooks
+  // COMPUTED VALUES
   // ========================================================================================
   
   // Columns definition
@@ -618,7 +821,7 @@ export default function BasePage() {
     }
     
     try {
-      await addTable.mutateAsync({ baseId });
+      await addTable.mutateAsync({ baseId, currentTableName });
     } catch (error) {
       console.error("Table creation failed:", error);
     }
@@ -717,6 +920,11 @@ export default function BasePage() {
   const handleDeleteRow = useCallback(async (rowId: string) => {
     if (!baseId || !activeTableId) return;
     deleteRow.mutate({ rowId: rowId });
+    try {
+      await deleteRow.mutateAsync({ rowId });
+    } catch (error) {
+      console.error("Delete row failed:", error);
+    }
   }, [baseId, activeTableId, deleteRow]);
 
   const handleRenameColumn = useCallback(async (columnId: string, newName: string) => {
@@ -725,7 +933,9 @@ export default function BasePage() {
     isColumnOperationRef.current = true;
     
     try {
-      await renameColumn.mutateAsync({ columnId: columnId, newName: newName });
+      await renameColumn.mutateAsync({ columnId, newName });
+    } catch (error) {
+      console.error("Rename column failed:", error);
     } finally {
       setTimeout(() => {
         isColumnOperationRef.current = false;
@@ -759,10 +969,14 @@ export default function BasePage() {
       },
     });
 
-    updateColumnVisibility.mutate({
-      columnId,
-      visible: newVisibility,
-    });
+    try {
+      await updateColumnVisibility.mutateAsync({
+        columnId,
+        visible: newVisibility,
+      });
+    } catch (error) {
+      console.error("Toggle column visibility failed:", error);
+    }
   }, [columnVisibility, set, updateColumnVisibility]);
 
   const handleFilteredDataChange = useCallback((data: BackendRow[] | null) => {
@@ -770,6 +984,17 @@ export default function BasePage() {
   }, [set]);
 
   const toggleUserMenu = useCallback(() => set({userProfile: !userProfile}), [set, userProfile]);
+
+  const handleSetActiveTable = useCallback((tableId: string) => {
+    set({ activeTableId: tableId });
+  }, [set]);
+
+  const handleToggleDropdown = useCallback((tableId: string) => {
+    const currentOpenDropdownId = useUIStore.getState().openDropdownId;
+    set({
+      openDropdownId: currentOpenDropdownId === tableId ? null : tableId,
+    });
+  }, [set]);
 
   const virtualItems = rowVirtualizer.getVirtualItems();
 
@@ -896,139 +1121,27 @@ export default function BasePage() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col">
-      <header className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200">
-        <div className="flex items-center gap-2 min-w-[220px]">
-          <div
-            className="w-8 h-8 rounded-md flex items-center justify-center"
-            style={{ backgroundColor: stringToColor(baseId ?? '', 50) }}
-          >
-            <Image
-              src="/airtable.png"
-              alt="Logo"
-              width={28}
-              height={28}
-              className={`object-contain ${isDarkColor(stringToColor(baseId ?? '', 50)) ? "invert" : ""}`}
-            />
-          </div>
-
-          <div className="flex items-center gap-1">
-            <div className="text-[18px] font-semibold text-gray-800 whitespace-nowrap">
-              {isLoading ? "Loading..." : baseName ?? "Untitled Base"}
-            </div>
-            <ChevronDown className="w-4 h-4 text-gray-800" />
-          </div>
-        </div>
-
-        <nav className="flex items-center gap-3 text-sm text-gray-600">
-          <a
-            href="#"
-            className="relative font-medium text-black px-2"
-          >
-            <span className="relative z-10">Data</span>
-            <span
-              className="absolute top-9 left-1/2 -translate-x-1/2 w-7 h-[3px] rounded-sm"
-              style={{ backgroundColor: stringToColor(baseId ?? "", 50) }}
-            />
-          </a>
-          <a href="#" className="hover:text-black">Automations</a>
-          <a href="#" className="hover:text-black">Interfaces</a>
-          <a href="#" className="hover:text-black">Forms</a>
-        </nav>
-
-        <div className="flex items-center gap-3 text-xs whitespace-nowrap">
-          <History className="w-4 h-4 text-gray-700"/>
-          <span className="bg-[#f2f2f2] text-[13px] text-gray-800 px-3 py-2 rounded-full">
-            Trial: 7 days left
-          </span>
-          <button className="text-white text-xs px-3 py-1.5 shadow-sm rounded-md font-medium cursor-pointer"
-          style={{ backgroundColor: stringToColor(baseId ?? '', 50) }}>
-            Share
-          </button>
-        </div>
-      </header>
+        <HeaderLayout 
+          baseId={baseId}
+          baseName={baseName}
+          isLoading={isLoading}
+          stringToColor={stringToColor}
+          isDarkColor={isDarkColor}
+        />
 
         {/* Table Tabs Section */}
-        <div
-          className="flex items-center border-gray-200 text-sm relative"
-          style={{ backgroundColor: lighterColor }}
-        >
-          {baseData.tables.map((table) => (
-            <div key={table.id} className="relative border-r border-gray-200">
-              <div
-                className={`flex items-center px-4 py-1 rounded-t-md border border-gray-200 cursor-pointer ${
-                  table.id === activeTableId
-                    ? "bg-white text-black border-b-white font-semibold"
-                    : "text-gray-500 hover:text-black border-transparent"
-                }`}
-              >
-                
-                <button onClick={() => set({ activeTableId: table.id })} className="mr-1">
-                  {table.name}
-                </button>
-                <ChevronDown
-                  size={16}
-                  className="text-gray-500 hover:text-gray-700"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const currentOpenDropdownId = useUIStore.getState().openDropdownId;
-                    set({
-                      openDropdownId: currentOpenDropdownId === table.id ? null : table.id,
-                    });
-                  }}
-                />
-              </div>
-
-              {/* Table choice dropdown menu */}
-              {openDropdownId === table.id && (
-                <div
-                  className="absolute z-50 top-full mt-1 left-0 w-56 bg-white border border-gray-200 shadow-lg rounded-md p-1"
-                >
-                  <ul className="text-sm text-gray-700">
-                    <li className="px-3 py-2 hover:bg-gray-50 cursor-pointer">Import data</li>
-                    <li className="px-3 py-2 hover:bg-gray-50 cursor-pointer">Rename table</li>
-                    <li className="px-3 py-2 hover:bg-gray-50 cursor-pointer">Hide table</li>
-                    <li className="px-3 py-2 hover:bg-gray-50 cursor-pointer">Manage fields</li>
-                    <li className="px-3 py-2 hover:bg-gray-50 cursor-pointer">Duplicate table</li>
-                    <li className="px-3 py-2 hover:bg-gray-50 cursor-pointer">Configure date dependencies</li>
-                    <li className="px-3 py-2 hover:bg-gray-50 cursor-pointer">Edit table description</li>
-                    <li className="px-3 py-2 hover:bg-gray-50 cursor-pointer">Edit table permissions</li>
-                    <li
-                      className="px-3 py-2 text-red-600 hover:bg-red-50 cursor-pointer"
-                      onClick={() => {
-                        if (removeTable.isPending) {
-                          toast.warn("Table deletion already in progress");
-                          return;
-                        }
-                        void handleDeleteTable(table.id);
-                      }}
-                    >
-                      Delete table
-                    </li>
-                  </ul>
-                </div>
-              )}
-            </div>
-          ))}
-
-          <button
-            onClick={handleAddTable}
-            disabled={addTable.isPending}
-            className={`flex items-center ml-2 px-2 py-1 text-[14px] cursor-pointer transition-colors ${
-              addTable.isPending 
-                ? "text-gray-400 cursor-not-allowed" 
-                : "text-gray-600 hover:text-gray-700"
-            }`}
-          >
-            {addTable.isPending ? (
-              <>
-                <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin mr-1" />
-                Creating...
-              </>
-            ) : (
-              "+ Add or Import"
-            )}
-          </button>
-        </div>
+        <TableTabs 
+          tables={baseData.tables}
+          activeTableId={activeTableId}
+          lighterColor={lighterColor}
+          openDropdownId={openDropdownId}
+          removeTableIsPending={removeTable.isPending}
+          addTableIsPending={addTable.isPending}
+          onSetActiveTable={handleSetActiveTable}
+          onToggleDropdown={handleToggleDropdown}
+          onDeleteTable={handleDeleteTable}
+          onAddTable={handleAddTable}
+        />
 
         <TableToolbar   
           onSearchChange={handleSearchChange} 

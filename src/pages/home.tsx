@@ -38,6 +38,7 @@ import clsx from "clsx";
 import { toast } from "react-toastify";
 import { formatDistanceToNow } from "date-fns";
 import { api } from "~/utils/api";
+import { v4 as uuidv4 } from "uuid";
 
 // ===== UTILITY FUNCTIONS =====
 function stringToColor(str: string): string {
@@ -61,6 +62,7 @@ type Base = {
 export default function HomeDashboard() {
   const { user, isLoaded: isUserLoaded } = useUser();
   const router = useRouter();
+  const utils = api.useUtils();
 
   // ===== STATE MANAGEMENT =====
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -88,15 +90,91 @@ export default function HomeDashboard() {
   } = api.base.getAll.useQuery(undefined, {
     enabled: isUserLoaded && !!user?.id,
   });
-  const deleteBaseMutation = api.base.deleteBase.useMutation();
+  const deleteBaseMutation = api.base.deleteBase.useMutation({
+    onMutate: async ({ baseId }) => {
+      await utils.base.getAll.cancel();
+
+      const previous = utils.base.getAll.getData();
+
+      utils.base.getAll.setData(undefined, (old) => {
+        if (!old) return old;
+        return old.filter((b) => b.id !== baseId);
+      });
+
+      setConfirmDeleteBaseId(null);
+
+      return { previous };
+    },
+    onError: (err, { baseId }, ctx) => {
+      if (ctx?.previous) {
+        utils.base.getAll.setData(undefined, ctx.previous);
+      }
+      toast.error("Something went wrong while deleting.");
+    },
+    onSuccess: (_, { baseId }) => {
+      toast.success("Base moved to trash.");
+    },
+    onSettled: async () => {
+      await utils.base.getAll.invalidate();
+    },
+  });
+
   const createBaseMutation = api.base.createBase.useMutation({
-    onSuccess: (data) => {
-      void router.push(`/base/${data.baseId}`);
+    onMutate: async () => {
+      await utils.base.getAll.cancel();
+      const previousBases = utils.base.getAll.getData();
+      const optimisticBase = {
+        id: uuidv4(),
+        name: "Untitled Base",
+        userId: user?.id || "",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        isOptimistic: true,
+      };
+
+      utils.base.getAll.setData(undefined, (old) => {
+        if (!old) return [optimisticBase];
+        return [optimisticBase, ...old];
+      });
+
+      void router.push(`/base/${optimisticBase.id}`);
+      setIsCreating(false);
+      return { previousBases, optimisticBase };
+    },
+
+    onError: (err, newBase, context) => {
+      if (context?.previousBases) {
+        utils.base.getAll.setData(undefined, context.previousBases);
+      }
+      void router.push("/");
+      alert("Failed to create base. Please try again.");
       setIsCreating(false);
     },
-    onError: () => {
-      alert("Failed to create base.");
-      setIsCreating(false);
+
+    onSuccess: (data, variables, context) => {
+      utils.base.getAll.setData(undefined, (old) => {
+        if (!old) return [];
+        
+        return old.map((base) => {
+          if (context?.optimisticBase && base.id === context.optimisticBase.id) {
+            return {
+              id: data.baseId,
+              name: "Untitled Base",
+              userId: user?.id || "",
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+          }
+          return base;
+        });
+      });
+      if (context?.optimisticBase.id !== data.baseId) {
+        void router.replace(`/base/${data.baseId}`);
+      }
+    },
+
+    onSettled: () => {
+      void utils.base.getAll.invalidate();
     },
   });
 
@@ -107,19 +185,15 @@ export default function HomeDashboard() {
     setIsCreating(true);
     createBaseMutation.mutate();
   };
+  
+  const handleCreateBase = () => {
+    if (createBaseMutation.isPending || isCreating) return;
+    
+    createBaseMutation.mutate();
+  };
 
   const handleDelete = (base: Base) => {
-    deleteBaseMutation.mutate(
-      { baseId: base.id },
-      {
-        onSuccess: () => {
-          toast.success("Base moved to trash.");
-          setConfirmDeleteBaseId(null);
-          void refetch();
-        },
-        onError: () => toast.error("Something went wrong while deleting."),
-      }
-    );
+    deleteBaseMutation.mutate({ baseId: base.id });
   };
 
   // ===== RENDER =====
@@ -599,7 +673,7 @@ export default function HomeDashboard() {
           {isCreating && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
               <div className="flex items-center gap-2">
-                <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-blue-500 border-opacity-75" />
+                <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-gray-800 border-opacity-75" />
                 <span className="text-gray-700 text-sm">Creating base...</span>
               </div>
             </div>
