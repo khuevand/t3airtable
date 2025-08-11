@@ -51,6 +51,9 @@
             setIsFilterLoading(true);
             },
         onSuccess: (data: BackendRow[]) => {
+            toast.success(`Filter successed!`, {
+                autoClose: 1000,
+            });
             set({ filteredData: data });
             setIsFilterLoading(false);
         },
@@ -67,6 +70,9 @@
             setIsSortLoading(true);
         },
         onSuccess: (data: BackendRow[]) => {
+            toast.success(`Sort successed!`, {
+                autoClose: 1000,
+            });
             set({ sortedData: data });
             setIsSortLoading(false);
         },

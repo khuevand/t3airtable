@@ -54,6 +54,16 @@ interface TempColumn {
   updatedAt?: Date;
 }
 
+type CacheCell = { id: string; columnId: string; rowId: string; value: string | null };
+type CacheRow  = { id: string; cells: CacheCell[] };
+
+interface Page {
+  id: string;
+  name: string;
+  columns: TempColumn[];
+  rows: BackendRow[];
+}
+
 // ========================================================================================
 // MAIN COMPONENT
 // ========================================================================================
@@ -217,7 +227,7 @@ export default function BasePage() {
     });
   }
 
-  const forEachPage = <T,>(pages: Array<any>, fn: (p: any) => void) => {
+  const forEachPage = <T extends Page>(pages: T[], fn: (p: T) => void) => {
     for (const p of pages) fn(p);
   };
 
@@ -277,10 +287,10 @@ export default function BasePage() {
       const key = { baseId, tableId: activeTableId };
       await utils.table.getTableById.cancel(key);
       const prev = utils.table.getTableById.getInfiniteData(key);
-
+      
       editInfiniteTable(key, (data) => {
-        forEachPage(data.pages, (page) => {
-          page.columns = page.columns.map((col: any) =>
+        forEachPage(data.pages, (page: Page) => {
+          page.columns = page.columns.map((col: TempColumn) =>
             col.id === columnId ? { ...col, visible } : col
           );
         });
@@ -302,8 +312,6 @@ export default function BasePage() {
           },
         });
       }
-    },
-    onSuccess(_data, _vars, _ctx) {
     },
     onSettled(_d, _e) {
       if (baseId && activeTableId) {
@@ -366,14 +374,15 @@ export default function BasePage() {
       if (ctx?.prev) utils.table.getTableById.setInfiniteData(ctx.key, ctx.prev);
       toast.error("Failed to create column. Please try again.");
     },
+
     onSuccess(newColumn, _vars, ctx) {
       if (!ctx) return;
       editInfiniteTable(ctx.key, (data) => {
         const first = data.pages[0];
         if (!first) return;
         first.columns = first.columns
-          .map((c: any) => String(c.id).startsWith("temp-col-") ? newColumn : c)
-          .sort((a: any, b: any) => a.order - b.order);
+          .map((c: TempColumn) => String(c.id).startsWith("temp-col-") ? newColumn : c)
+          .sort((a: TempColumn, b: TempColumn) => a.order - b.order);
       });
       toast.success("Column created successfully!");
     },
@@ -390,12 +399,12 @@ export default function BasePage() {
       await utils.table.getTableById.cancel(key);
       const prev = utils.table.getTableById.getInfiniteData(key);
 
-      editInfiniteTable(key, (data) => {
-        forEachPage(data.pages, (page) => {
-          page.columns = page.columns.filter((c: any) => c.id !== columnId);
-          page.rows = page.rows.map((r: any) => ({
+      editInfiniteTable(key, (data: { pages: Page[] }) => {
+        forEachPage<Page>(data.pages, (page) => {
+          page.columns = page.columns.filter((c: TempColumn) => c.id !== columnId);
+          page.rows = page.rows.map((r: BackendRow) => ({
             ...r,
-            cells: r.cells.filter((cell: any) => cell.columnId !== columnId)
+            cells: r.cells.filter((cell) => cell.columnId !== columnId),
           }));
         });
       });
@@ -409,7 +418,7 @@ export default function BasePage() {
     onSuccess(_data, _vars, _ctx) {
       toast.success("Column deleted successfully!");
     },
-    onSettled(_d, _e, { columnId }) {
+    onSettled(_d, _e,) {
       if (baseId && activeTableId) {
         void utils.table.getTableById.invalidate({ baseId, tableId: activeTableId });
       }
@@ -422,24 +431,22 @@ export default function BasePage() {
       await utils.table.getTableById.cancel(key);
       const prev = utils.table.getTableById.getInfiniteData(key);
 
-      // Create temporary row with empty cells for all columns
-      const tempRow = {
-        id: `temp-row-${Date.now()}`,
-        cells: tableData?.columns.map(col => ({
-          id: `temp-cell-${Date.now()}-${col.id}`,
-          columnId: col.id,
-          value: col.type === 'number' ? 0 : '',
-          rowId: `temp-row-${Date.now()}`,
-        })) ?? [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+    const tempRowId = `temp-row-${Date.now()}`;
+    const tempRow: CacheRow = {
+      id: tempRowId,
+      cells: (tableData?.columns ?? []).map(col => ({
+        id: `temp-cell-${Date.now()}-${col.id}`,
+        columnId: col.id,
+        rowId: tempRowId,
+        value: null,
+      })),
+    };
 
-      editInfiniteTable(key, (data) => {
-        const lastPage = data.pages[data.pages.length - 1];
-        if (!lastPage) return;
-        lastPage.rows = [...lastPage.rows, tempRow as any];
-      });
+    editInfiniteTable(key, (data) => {
+      const lastPage = data.pages[data.pages.length - 1];
+      if (!lastPage) return;
+      lastPage.rows = [...lastPage.rows, tempRow];
+    });
 
       return { prev, key, tempRowId: tempRow.id };
     },
@@ -451,7 +458,7 @@ export default function BasePage() {
       if (!ctx) return;
       editInfiniteTable(ctx.key, (data) => {
         forEachPage(data.pages, (page) => {
-          page.rows = page.rows.map((r: any) => 
+          page.rows = page.rows.map((r: CacheRow) => 
             r.id === ctx.tempRowId ? newRow : r
           );
         });
@@ -473,7 +480,7 @@ export default function BasePage() {
 
       editInfiniteTable(key, (data) => {
         forEachPage(data.pages, (page) => {
-          page.rows = page.rows.filter((r: any) => r.id !== rowId);
+          page.rows = page.rows.filter((r: CacheRow) => r.id !== rowId);
         });
       });
 
@@ -503,7 +510,7 @@ export default function BasePage() {
 
       editInfiniteTable(key, (data) => {
         forEachPage(data.pages, (page) => {
-          page.columns = page.columns.map((col: any) =>
+          page.columns = page.columns.map((col: TempColumn) =>
             col.id === columnId ? { ...col, name: newName } : col
           );
         });

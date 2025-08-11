@@ -81,8 +81,8 @@ export default function TableToolbar({
   // LOCAL UI STATE (only for dropdowns)
   // ============================================================================
     // Hide
-  const [showSearchBox, setShowSearchBox] = useState(false);
-  const [showHideFields, setShowHideFields] = useState(false);
+  const [_showSearchBox, setShowSearchBox] = useState(false);
+  const [_showHideFields, setShowHideFields] = useState(false);
   const isAnyColumnHidden = Object.values(columnVisibility).some((visible) => !visible);
 
   // Search 

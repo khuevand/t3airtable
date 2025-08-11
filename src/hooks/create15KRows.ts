@@ -79,7 +79,7 @@ export const useCreateManyRows = ({
       return { key, previousData: null };
     },
     
-    onSuccess: (result, variables, context) => {
+    onSuccess: (result, _variables, _context) => {
       const { batchNumber, totalBatches, rowsCreated } = result;
       
       setCreationProgress(prev => ({

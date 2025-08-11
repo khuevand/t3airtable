@@ -85,7 +85,6 @@ export default function HomeDashboard() {
   // ===== API CALLS =====
   const {
     data: bases = [],
-    refetch,
     isLoading: isBasesLoading,
   } = api.base.getAll.useQuery(undefined, {
     enabled: isUserLoaded && !!user?.id,
@@ -105,7 +104,7 @@ export default function HomeDashboard() {
 
       return { previous };
     },
-    onError: (err, { baseId }, ctx) => {
+    onError: (_err, { baseId }, ctx) => {
       if (ctx?.previous) {
         utils.base.getAll.setData(undefined, ctx.previous);
       }
@@ -186,12 +185,6 @@ export default function HomeDashboard() {
     createBaseMutation.mutate();
   };
   
-  const handleCreateBase = () => {
-    if (createBaseMutation.isPending || isCreating) return;
-    
-    createBaseMutation.mutate();
-  };
-
   const handleDelete = (base: Base) => {
     deleteBaseMutation.mutate({ baseId: base.id });
   };
