@@ -237,7 +237,7 @@ export default function BasePage() {
   // ========================================================================================
   
   const addTable = api.table.addTable.useMutation({
-    async onMutate({ baseId, currentTableName }) {
+    async onMutate({ baseId }) {
       await utils.base.getBase.cancel({ baseId });
       const prev = utils.base.getBase.getData({ baseId });
 

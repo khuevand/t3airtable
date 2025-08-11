@@ -48,37 +48,33 @@
     // API mutations
     const filterMutation = api.filter.getFilteredRecords.useMutation({
         onMutate: () => {
-        setIsFilterLoading(true);
-        },
+            setIsFilterLoading(true);
+            },
         onSuccess: (data: BackendRow[]) => {
-        set({ filteredData: data });
-        setIsFilterLoading(false);
-        toast.success(`Filtered to ${data.length} rows`), {
-          autoClose: 1000,
-        }},
+            set({ filteredData: data });
+            setIsFilterLoading(false);
+        },
         onError: (error) => {
-        console.error('Filter error:', error);
-        toast.error('Failed to apply filters');
-        set({ filteredData: null });
-        setIsFilterLoading(false);
+            console.error('Filter error:', error);
+            toast.error('Failed to apply filters');
+            set({ filteredData: null });
+            setIsFilterLoading(false);
         }
     });
 
     const sortMutation = api.sort.getSortedRecords.useMutation({
         onMutate: () => {
-        setIsSortLoading(true);
+            setIsSortLoading(true);
         },
         onSuccess: (data: BackendRow[]) => {
-        set({ sortedData: data });
-        setIsSortLoading(false);
-        toast.success('Sorting applied'), {
-          autoClose: 1000,
-        }},
+            set({ sortedData: data });
+            setIsSortLoading(false);
+        },
         onError: (error) => {
-        console.error('Sort error:', error);
-        toast.error('Failed to apply sorting');
-        set({ sortedData: null });
-        setIsSortLoading(false);
+            console.error('Sort error:', error);
+            toast.error('Failed to apply sorting');
+            set({ sortedData: null });
+            setIsSortLoading(false);
         }
     });
 
@@ -93,30 +89,15 @@
         }));
     }, []);
 
-    const removeFilter = useCallback((index: number) => {
-        setOperations(prev => {
-        const newFilters = prev.filters.filter((_, i) => i !== index);
-        if (newFilters.length === 0) {
-            set({ filteredData: null });
-        } else {
-            setTimeout(() => {
-            applyFilters();
-            }, 100);
-        }
-        
-        return { ...prev, filters: newFilters };
-        });
-    }, [set]);
-
     const applyFilters = useCallback(async () => {
         if (operations.filters.length === 0) {
-        set({ filteredData: null });
-        return;
+            set({ filteredData: null });
+            return;
         }
 
         if (!tableId || !baseId) {
-        toast.error('Missing table or base information');
-        return;
+            toast.error('Missing table or base information');
+            return;
         }
 
         try {
@@ -126,21 +107,37 @@
             logicalOperator: operations.filterLogicalOperator
         });
 
-        await void filterMutation.mutateAsync({
+        void filterMutation.mutateAsync({
             tableId,
             filters: operations.filters,
             logicalOperator: operations.filterLogicalOperator,
         });
         } catch (error) {
-        console.error("Filter application failed:", error);
+            console.error("Filter application failed:", error);
         }
     }, [operations.filters, operations.filterLogicalOperator, filterMutation, tableId, baseId, set]);
 
+    const removeFilter = useCallback((index: number) => {
+        setOperations(prev => {
+        const newFilters = prev.filters.filter((_, i) => i !== index);
+        if (newFilters.length === 0) {
+            set({ filteredData: null });
+        } else {
+            setTimeout(() => {
+            void applyFilters();
+            }, 100);
+        }
+        
+        return { ...prev, filters: newFilters };
+        });
+    }, [set, applyFilters]);
+
+
     const clearAllFilters = useCallback(() => {
         setOperations(prev => ({
-        ...prev,
-        filters: [],
-        filterLogicalOperator: 'AND'
+            ...prev,
+            filters: [],
+            filterLogicalOperator: 'AND'
         }));
         set({ filteredData: null });
     }, [set]);
@@ -155,12 +152,12 @@
     
     const addSortRule = useCallback(() => {
         setOperations(prev => ({
-        ...prev,
-        sortRules: [...prev.sortRules, { 
-            columnId: "", 
-            direction: "asc" as const,
-            logicalOperator: "AND" as const
-        }]
+            ...prev,
+            sortRules: [...prev.sortRules, { 
+                columnId: "", 
+                direction: "asc" as const,
+                logicalOperator: "AND" as const
+            }]
         }));
     }, []);
 
@@ -173,24 +170,6 @@
         return { ...prev, sortRules: updated };
         });
     }, []);
-
-    const removeSortRule = useCallback((index: number) => {
-        setOperations(prev => {
-        const updatedRules = prev.sortRules.filter((_, i) => i !== index);
-        // Auto-apply if valid sorts remain, clear if none
-        const hasValidSort = updatedRules.some(rule => rule.columnId);
-        if (!hasValidSort) {
-            set({ sortedData: null });
-        } else {
-            // Auto-apply remaining sorts
-            setTimeout(() => {
-            applySorts();
-            }, 100);
-        }
-        
-        return { ...prev, sortRules: updatedRules };
-        });
-    }, [set]);
 
     const applySorts = useCallback(async () => {
         const validSorts = operations.sortRules.filter(rule => rule.columnId !== "");
@@ -215,7 +194,7 @@
             }))
         });
 
-        await void sortMutation.mutateAsync({
+        void sortMutation.mutateAsync({
             tableId,
             sortBy: validSorts.map(rule => ({
             columnId: rule.columnId,
@@ -226,6 +205,24 @@
         console.error("Sort application failed:", error);
         }
     }, [operations.sortRules, sortMutation, tableId, baseId, set]);
+
+    const removeSortRule = useCallback((index: number) => {
+        setOperations(prev => {
+        const updatedRules = prev.sortRules.filter((_, i) => i !== index);
+        // Auto-apply if valid sorts remain, clear if none
+        const hasValidSort = updatedRules.some(rule => rule.columnId);
+        if (!hasValidSort) {
+            set({ sortedData: null });
+        } else {
+            // Auto-apply remaining sorts
+            setTimeout(() => {
+            void applySorts();
+            }, 100);
+        }
+        
+        return { ...prev, sortRules: updatedRules };
+        });
+    }, [set, applySorts]);
 
     const clearAllSorts = useCallback(() => {
         setOperations(prev => ({ ...prev, sortRules: [] }));

@@ -108,18 +108,20 @@ export const useCreateManyRows = ({
         });
 
         // Final data refresh after all batches
-        setTimeout(async () => {
-          if (baseId && tableId) {
-            await utils.table.getTableById.invalidate({ baseId, tableId });
-            if (tableContainerRef?.current) {
-              tableContainerRef.current.scrollTop = 0;
+        setTimeout(() => {
+          void (async () => {
+            if (baseId && tableId) {
+              await utils.table.getTableById.invalidate({ baseId, tableId });
+              if (tableContainerRef?.current) {
+                tableContainerRef.current.scrollTop = 0;
+              }
+              
+              setTimeout(() => {
+                rowVirtualizerRef.current?.scrollToIndex(0);
+              }, 100);
+              onComplete?.();
             }
-            
-            setTimeout(() => {
-              rowVirtualizerRef.current?.scrollToIndex(0);
-            }, 100);
-            onComplete?.();
-          }
+          })();
         }, 300);
       }
     },
@@ -172,7 +174,7 @@ export const useCreateManyRows = ({
           ? totalRows - (i - 1) * BATCH_SIZE 
           : BATCH_SIZE;
 
-        await void createRowsBatchMutation.mutateAsync({
+        await createRowsBatchMutation.mutateAsync({
           tableId,
           count: currentBatchSize,
           batchNumber: i,
