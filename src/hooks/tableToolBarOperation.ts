@@ -236,7 +236,6 @@
     // COMPUTED VALUES
     // =============================================================================
     
-    const isAnyColumnHidden = Object.values(operations.columnVisibility).some(visible => !visible);
     const activeFiltersCount = operations.filters.length;
     const activeSortsCount = operations.sortRules.filter(rule => rule.columnId).length;
 
@@ -246,7 +245,6 @@
     
     return {
         operations,
-        isAnyColumnHidden,
         activeFiltersCount,
         activeSortsCount,
 

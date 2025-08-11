@@ -203,13 +203,18 @@ export default function BasePage() {
   // ========================================================================================
   // OPTIMISTIC MUTATION HELPER
   // ========================================================================================
+  
   function editInfiniteTable(
     key: { baseId: string; tableId: string; limit?: number },
     editor: (draft: NonNullable<ReturnType<typeof utils.table.getTableById.getInfiniteData>>) => void
   ) {
     utils.table.getTableById.setInfiniteData(key, (old) => {
       if (!old) return old;
-      const copy = structuredClone(old);
+      // Shallow copy: new wrapper object + new pages array
+      const copy = {
+        ...old,
+        pages: old.pages.map((p) => ({ ...p }))
+      };
       editor(copy);
       return copy;
     });
@@ -634,8 +639,8 @@ export default function BasePage() {
   const rowVirtualizer = useVirtualizer({
     count: memorizedTransformedRows.length,
     getScrollElement: () => tableContainerRef.current,
-    estimateSize: () => 40,
-    overscan: 10,
+    estimateSize: () => 36,
+    overscan: 20,
   });
 
   const { 
@@ -717,30 +722,44 @@ export default function BasePage() {
   }, []);
 
   // Infinite scrolling handler
-  useEffect(() => {
-    if (filteredData || sortedData) return;
+  // useEffect(() => {
+  //   if (filteredData || sortedData) return;
       
-    const virtualItems = rowVirtualizer.getVirtualItems();
-    const [lastItem] = virtualItems.slice(-1);
+  //   const virtualItems = rowVirtualizer.getVirtualItems();
+  //   const [lastItem] = virtualItems.slice(-1);
     
-    if (!lastItem) return;
+  //   if (!lastItem) return;
     
-    const totalRows = memorizedTransformedRows.length;
-    const currentPosition = lastItem.index;
-    const progressPercentage = (currentPosition / totalRows) * 100;
+  //   const totalRows = memorizedTransformedRows.length;
+  //   const currentPosition = lastItem.index;
+  //   const progressPercentage = (currentPosition / totalRows) * 100;
     
-    // Prefetch when user is 30% through the current data
-    if (progressPercentage > 30 && hasNextPage && !isFetchingNextPage) {
-      console.log('Prefetching next page at 30% progress');
+  //   // Prefetch when user is 30% through the current data
+  //   if (progressPercentage > 30 && hasNextPage && !isFetchingNextPage) {
+  //     console.log('Prefetching next page at 30% progress');
+  //     void fetchNextPage();
+  //   }
+  // }, [
+  //   rowVirtualizer,
+  //   memorizedTransformedRows.length,
+  //   hasNextPage,
+  //   isFetchingNextPage,
+  //   fetchNextPage
+  // ]);
+
+  useEffect(() => {
+    const [lastItem] = [...rowVirtualizer.getVirtualItems()].reverse();
+    
+    if (
+      lastItem &&
+      lastItem.index >= memorizedTransformedRows.length - 100 &&
+      hasNextPage &&
+      !isFetchingNextPage &&
+      memorizedTransformedRows.length > 0
+    ) {
       void fetchNextPage();
     }
-  }, [
-    rowVirtualizer,
-    memorizedTransformedRows.length,
-    hasNextPage,
-    isFetchingNextPage,
-    fetchNextPage
-  ]);
+  }, [rowVirtualizer.getVirtualItems(), memorizedTransformedRows.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // ========================================================================================
   // EVENT HANDLERS
@@ -1107,11 +1126,11 @@ export default function BasePage() {
                 </p>
               </div>
             ) : tableData ? (
-              <div className="flex flex-col h-full">
+              <div className="flex flex-col w-full h-full">
                 {/* Single table with virtualized body */}
                 <div
                   ref={tableContainerRef}
-                  className="flex-1 bg-white"
+                  className="flex-1 bg-white h-full overflow-auto"
                 >
                   <table className="min-w-full border border-gray-300 bg-white table-fixed">
                     {/* Header */}
@@ -1131,7 +1150,12 @@ export default function BasePage() {
                               } ${
                                 sortedColumnIds.has(header.column.id) ? "bg-[#ffe0cc]" : ""
                               }`}
-                              style={{ width: index === 0 ? '200px' : '150px' }}
+                              // style={{ width: index === 0 ? '200px' : '150px' }}
+                              style={{ 
+                                width: `${header.getSize()}px`,
+                                minWidth: `${header.getSize()}px`,
+                                maxWidth: `${header.getSize()}px`
+                              }}
                             >
                               {index === 0 ? (
                                 <div className="flex items-center gap-2">
@@ -1146,6 +1170,10 @@ export default function BasePage() {
                                   >
                                     {allSelected ? <CheckSquare className="w-4 h-4 text-gray-700" /> : <Square className="w-4 h-4 text-gray-700" />}
                                   </button>
+                                  <div 
+                                    className="text-gray-400 font-normal" 
+                                    style={{ width: '30px' }}
+                                  ></div>
                                   <span
                                     dangerouslySetInnerHTML={{
                                       __html: highlightSearchTerm(
@@ -1293,14 +1321,16 @@ export default function BasePage() {
                     </thead>
 
                     {/* Virtualized Body */}
-                    <tbody>
+                    <tbody style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
                       <tr>
                         <td colSpan={memorizedColumns.length + 1} className="p-0">
                           <div
                             style={{
-                              height: `${rowVirtualizer.getTotalSize()}px`,
+                              // height: `${rowVirtualizer.getTotalSize()}px`,
                               width: '100%',
-                              position: 'relative',
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
                             }}
                           >
                             {virtualItems.map((virtualRow) => {
@@ -1341,8 +1371,15 @@ export default function BasePage() {
 
                                         style={{ 
                                           display: 'table-cell',
-                                          width: index === 0 ? '200px' : '150px',
-                                          verticalAlign: 'middle'
+                                          height: '36px',
+                                          // width: index === 0 ? '200px' : '150px',
+                                          verticalAlign: 'middle',
+                                          width: `${cell.column.getSize()}px`,
+                                          minWidth: `${cell.column.getSize()}px`,
+                                          maxWidth: `${cell.column.getSize()}px`,
+                                          overflow: 'hidden', 
+                                          textOverflow: 'ellipsis', 
+                                          whiteSpace: 'nowrap' 
                                         }}
                                       >
                                         {index === 0 ? (
@@ -1367,7 +1404,7 @@ export default function BasePage() {
                                             </button>
 
                                             {/* Row index */}
-                                            <span className="min-w-[30px] w-5 text-right text-gray-500 whitespace-nowrap">
+                                            <span className="min-w-[30px] w-5 text-right text-gray-500 whitespace-nowrap" style={{ width: '30px'}}>
                                               {row.index + 1}
                                             </span>
 

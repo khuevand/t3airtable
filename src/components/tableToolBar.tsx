@@ -622,44 +622,6 @@ export default function TableToolbar({
           </div>
         </div>
       )}
-
-      {/* Operation Status Indicators
-      {(isFilterLoading || isSortLoading || operations.searchTerm) && (
-        <div className="px-4 py-1 bg-gray-50 border-b border-gray-200 text-xs text-gray-600 flex items-center gap-4">
-          {operations.searchTerm && (
-            <div className="flex items-center gap-1">
-              <Search className="w-3 h-3" />
-              <span>Searching for: "{operations.searchTerm}"</span>
-              <span className="text-gray-500">
-                ({operations.searchResults.totalMatches} matches)
-              </span>
-            </div>
-          )}
-          
-          {activeFiltersCount > 0 && (
-            <div className="flex items-center gap-1">
-              <ListFilter className="w-3 h-3 text-green-600" />
-              <span>{activeFiltersCount} filter{activeFiltersCount > 1 ? 's' : ''} active</span>
-              {isFilterLoading && <div className="w-3 h-3 border border-green-600 border-t-transparent rounded-full animate-spin" />}
-            </div>
-          )}
-          
-          {activeSortsCount > 0 && (
-            <div className="flex items-center gap-1">
-              <ArrowUpDown className="w-3 h-3 text-orange-600" />
-              <span>{activeSortsCount} sort{activeSortsCount > 1 ? 's' : ''} active</span>
-              {isSortLoading && <div className="w-3 h-3 border border-orange-600 border-t-transparent rounded-full animate-spin" />}
-            </div>
-          )}
-          
-          {isAnyColumnHidden && (
-            <div className="flex items-center gap-1">
-              <EyeOff className="w-3 h-3 text-blue-600" />
-              <span>Some columns hidden</span>
-            </div>
-          )}
-        </div>
-      )} */}
     </div>
   );
 }
