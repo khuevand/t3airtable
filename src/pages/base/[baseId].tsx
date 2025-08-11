@@ -33,7 +33,6 @@ import EditableCell from "~/components/editableCells";
 import HeaderLayout from "~/components/headerLayout";
 import TableTabs from "~/components/tableTabs";
 import { useCreateManyRows } from "~/hooks/create15KRows";
-import { useTableOperations } from "~/hooks/tableToolBarOperation";
 
 // ========================================================================================
 // TYPE DEFINITIONS
@@ -54,8 +53,6 @@ interface TempColumn {
   createdAt?: Date;
   updatedAt?: Date;
 }
-
-type SortDirection = "asc" | "desc";
 
 // ========================================================================================
 // MAIN COMPONENT
@@ -433,7 +430,7 @@ export default function BasePage() {
           columnId: col.id,
           value: col.type === 'number' ? 0 : '',
           rowId: `temp-row-${Date.now()}`,
-        })) || [],
+        })) ?? [],
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -528,17 +525,6 @@ export default function BasePage() {
     },
   });
 
-  // const sortRecordsMutation = api.sort.getSortedRecords.useMutation({
-  //   onSuccess: (data: BackendRow[]) => {
-  //     console.log("Sorted rows returned:", data);
-  //     set({ sortedData: data });
-  //   },
-  //   onError: (err) => {
-  //     console.error("Sort error:", err);
-  //     set({ sortedData: null });
-  //   },
-  // });
-
   // ========================================================================================
   // COMPUTED VALUES
   // ========================================================================================
@@ -564,7 +550,7 @@ export default function BasePage() {
           tableId={activeTableId}
           rowId={props.row.id}
           columnId={props.column.id}
-          searchTerm={searchTerm}        />
+          searchTerm={searchTerm}/>
         ),
       }));
   }, [tableData, activeTableId, searchTerm, columnVisibility]);
@@ -650,7 +636,6 @@ export default function BasePage() {
   } = useCreateManyRows({
     baseId: baseId ?? '',
     tableId: activeTableId ?? '',
-    rowVirtualizer,
     onComplete: () => {
       console.log('Bulk row creation completed!');
     }
@@ -720,32 +705,6 @@ export default function BasePage() {
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
     };
   }, []);
-
-  // Infinite scrolling handler
-  // useEffect(() => {
-  //   if (filteredData || sortedData) return;
-      
-  //   const virtualItems = rowVirtualizer.getVirtualItems();
-  //   const [lastItem] = virtualItems.slice(-1);
-    
-  //   if (!lastItem) return;
-    
-  //   const totalRows = memorizedTransformedRows.length;
-  //   const currentPosition = lastItem.index;
-  //   const progressPercentage = (currentPosition / totalRows) * 100;
-    
-  //   // Prefetch when user is 30% through the current data
-  //   if (progressPercentage > 30 && hasNextPage && !isFetchingNextPage) {
-  //     console.log('Prefetching next page at 30% progress');
-  //     void fetchNextPage();
-  //   }
-  // }, [
-  //   rowVirtualizer,
-  //   memorizedTransformedRows.length,
-  //   hasNextPage,
-  //   isFetchingNextPage,
-  //   fetchNextPage
-  // ]);
 
   useEffect(() => {
     const [lastItem] = [...rowVirtualizer.getVirtualItems()].reverse();

@@ -1,5 +1,5 @@
-// hooks/useCreateManyRows.ts
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useRef } from 'react';
+import type { Virtualizer } from '@tanstack/react-virtual';
 import { api } from "~/utils/api";
 import { toast } from "react-toastify";
 import { useUIStore } from "~/stores/useUIstores";
@@ -15,7 +15,7 @@ interface UseCreateManyRowsProps {
   baseId: string;
   tableId: string;
   tableContainerRef?: React.RefObject<HTMLDivElement>;
-  rowVirtualizer?: any;
+  // rowVirtualizer?: any;
   onComplete?: () => void;
 }
 
@@ -23,7 +23,7 @@ export const useCreateManyRows = ({
   baseId,
   tableId,
   tableContainerRef,
-  rowVirtualizer,
+  // rowVirtualizer,
   onComplete
 }: UseCreateManyRowsProps) => {
   const utils = api.useUtils();
@@ -36,9 +36,11 @@ export const useCreateManyRows = ({
     totalBatches: 0,
   });
 
+  const rowVirtualizerRef = useRef<Virtualizer<HTMLDivElement, Element> | null>(null);
+
   // OPTIMISTIC MUTATION for bulk creation
   const createRowsBatchMutation = api.row.createManyRowsBatch.useMutation({
-    async onMutate({ tableId, count, batchNumber, totalBatches }) {
+    async onMutate({ tableId, batchNumber }) {
       if (!baseId) return;
       
       const key = { baseId, tableId };
@@ -68,7 +70,7 @@ export const useCreateManyRows = ({
         }
         
         setTimeout(() => {
-          rowVirtualizer?.scrollToIndex?.(0);
+          rowVirtualizerRef.current?.scrollToIndex(0);
         }, 50);
 
         return { key, previousData };
@@ -114,7 +116,7 @@ export const useCreateManyRows = ({
             }
             
             setTimeout(() => {
-              rowVirtualizer?.scrollToIndex?.(0);
+              rowVirtualizerRef.current?.scrollToIndex(0);
             }, 100);
             onComplete?.();
           }
@@ -143,7 +145,7 @@ export const useCreateManyRows = ({
     }
   });
 
-  const handleCreateManyRows = useCallback(async (totalRows: number = 15000) => {
+  const handleCreateManyRows = useCallback(async (totalRows = 15000) => {
     if (!baseId || !tableId) {
       toast.error('Missing required information');
       return;
@@ -170,7 +172,7 @@ export const useCreateManyRows = ({
           ? totalRows - (i - 1) * BATCH_SIZE 
           : BATCH_SIZE;
 
-        await createRowsBatchMutation.mutateAsync({
+        await void createRowsBatchMutation.mutateAsync({
           tableId,
           count: currentBatchSize,
           batchNumber: i,

@@ -28,7 +28,7 @@
     columns: Column[];
     }
 
-    export function useTableOperations({ tableId, baseId, columns }: UseTableOperationsProps) {
+    export function useTableOperations({ tableId, baseId }: UseTableOperationsProps) {
     const set = useUIStore((state) => state.set);
     
     // Centralized state for all operations
@@ -126,7 +126,7 @@
             logicalOperator: operations.filterLogicalOperator
         });
 
-        await filterMutation.mutateAsync({
+        await void filterMutation.mutateAsync({
             tableId,
             filters: operations.filters,
             logicalOperator: operations.filterLogicalOperator,
@@ -215,7 +215,7 @@
             }))
         });
 
-        await sortMutation.mutateAsync({
+        await void sortMutation.mutateAsync({
             tableId,
             sortBy: validSorts.map(rule => ({
             columnId: rule.columnId,

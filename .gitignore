@@ -43,4 +43,4 @@ yarn-error.log*
 *.tsbuildinfo
 
 # idea files
-.idea
+.ideaet --hard \357\200\274commit-hash\357\200\276

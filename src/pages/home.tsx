@@ -126,7 +126,7 @@ export default function HomeDashboard() {
       const optimisticBase = {
         id: uuidv4(),
         name: "Untitled Base",
-        userId: user?.id || "",
+        userId: user?.id ?? "",
         createdAt: new Date(),
         updatedAt: new Date(),
         isOptimistic: true,
@@ -160,7 +160,7 @@ export default function HomeDashboard() {
             return {
               id: data.baseId,
               name: "Untitled Base",
-              userId: user?.id || "",
+              userId: user?.id ?? "",
               createdAt: new Date(),
               updatedAt: new Date(),
             };

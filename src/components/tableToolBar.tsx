@@ -571,7 +571,7 @@ export default function TableToolbar({
               {isBulkCreating ? (
                 <>
                   <div className="w-3 h-3 border border-blue-700 border-t-transparent rounded-full animate-spin" />
-                  Batch {bulkCreationProgress?.batchNumber || 0}...
+                  Batch {bulkCreationProgress?.batchNumber ?? 0}...
                 </>
               ) : (
                 "Add 15k Rows"
